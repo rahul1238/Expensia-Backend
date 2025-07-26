@@ -1,11 +1,10 @@
 package com.expensia.backend.controller;
 
+import com.expensia.backend.dto.TransactionRequest;
 import com.expensia.backend.model.Transaction;
 import com.expensia.backend.provider.TransactionService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -19,5 +18,10 @@ public class TransactionController {
   @GetMapping
   public List<Transaction> getTransactions() {
     return transactionService.getAllTransactions();
+  }
+
+  @PostMapping("/create")
+  public Transaction createTransaction(@RequestBody TransactionRequest request) {
+    return transactionService.createTransaction(request);
   }
 }

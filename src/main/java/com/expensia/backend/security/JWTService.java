@@ -24,6 +24,13 @@ public class JWTService {
         return Keys.hmacShaKeyFor(SecretKey.getBytes(StandardCharsets.UTF_8));
     }
 
+    private String removeBearerPrefix(String token) {
+        if (token != null && token.startsWith("Bearer ")) {
+            return token.substring(7);
+        }
+        return token;
+    }
+
     public String generateAccessToken(String email){
         return Jwts.builder()
                 .setSubject(email)
@@ -34,6 +41,7 @@ public class JWTService {
     }
 
     public String extractEmail(String token){
+        token = removeBearerPrefix(token);
         try{
             return Jwts.parserBuilder()
                     .setSigningKey(getSignInKey())

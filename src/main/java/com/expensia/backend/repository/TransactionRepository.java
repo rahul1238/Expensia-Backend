@@ -11,5 +11,5 @@ import java.util.Optional;
 
 @Repository
 public interface TransactionRepository extends MongoRepository<Transaction,String> {
-    List<Transaction> findByUserId(@NotNull String userId);
+    List<Transaction> findByUserId(@NotNull ObjectId userId);
 }

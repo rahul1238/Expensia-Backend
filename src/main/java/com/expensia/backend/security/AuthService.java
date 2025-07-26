@@ -3,10 +3,12 @@ package com.expensia.backend.security;
 import com.expensia.backend.dto.AuthResponse;
 import com.expensia.backend.dto.LoginRequest;
 import com.expensia.backend.dto.RegisterRequest;
+import com.expensia.backend.dto.UserDTO;
 import com.expensia.backend.model.Token;
 import com.expensia.backend.model.User;
 import com.expensia.backend.repository.TokenRepository;
 import com.expensia.backend.repository.UserRepository;
+import com.expensia.backend.utils.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +32,14 @@ public class AuthService {
                 return AuthResponse.error("Username already exists");
             }
 
+            if (userRepository.existsByEmail(request.getEmail())) {
+                return AuthResponse.error("Email already exists");
+            }
+
+            if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+                return AuthResponse.error("Phone number already exists");
+            }
+
             User user = User.builder()
                     .username(request.getUsername())
                     .password(passwordEncoder.encode(request.getPassword()))
@@ -48,7 +58,9 @@ public class AuthService {
 
             saveToken(savedUser, accessToken, refreshToken);
 
-            return AuthResponse.register(true, accessToken, null, "Registration successful: " + user.getUsername(), user);
+            UserDTO userResponse = UserMapper.toDto(savedUser);
+
+            return AuthResponse.auth(true, accessToken, null, "Registration successful: " + user.getUsername(), userResponse);
         } catch (Exception e) {
             return AuthResponse.error("Registration failed: " + e.getMessage());
         }
@@ -65,15 +77,22 @@ public class AuthService {
                 String accessToken = jwtService.generateAccessToken(user.getEmail());
                 String refreshToken = jwtService.generateRefreshToken(user.getEmail());
 
-                saveToken(user, accessToken, refreshToken);
+                UserDTO userResponse = UserMapper.toDto(user);
 
-                return AuthResponse.login(true, accessToken, refreshToken, "Login successful: " + user.getUsername());
+                return AuthResponse.auth(true, accessToken, refreshToken, "Login successful: " + user.getUsername(),userResponse);
             } catch (Exception e) {
                 return AuthResponse.error("Login failed: " + e.getMessage());
             }
     }
 
     public void saveToken(User user, String accessToken,String refreshToken) {
+
+        tokenRepository.findAllByUserIdAndRevokedFalse(new ObjectId(user.getId()))
+            .forEach(existingToken -> {
+                existingToken.setRevoked(true);
+                tokenRepository.save(existingToken);
+            });
+
         Token token = Token.builder()
             .userId(new ObjectId(user.getId()))
             .accessToken(accessToken)
@@ -100,6 +119,49 @@ public class AuthService {
             return AuthResponse.logout(true, "Logout successful for user: " + user.getUsername());
         } catch (Exception e) {
             return AuthResponse.error("Logout failed: " + e.getMessage());
+        }
+    }
+
+    public AuthResponse getCurrentUser( String accessToken) {
+        try {
+            String email = jwtService.extractEmail(accessToken);
+            User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+            UserDTO userResponse = UserMapper.toDto(user);
+            return AuthResponse.auth(true, null, null, "User retrieved successfully", userResponse);
+        } catch (Exception e) {
+            return AuthResponse.error("Failed to retrieve user: " + e.getMessage());
+        }
+    }
+
+    public AuthResponse refreshToken(String refreshToken) {
+        try {
+            String email = jwtService.extractEmail(refreshToken);
+            if (email == null) {
+                return AuthResponse.error("Invalid refresh token");
+            }
+
+            User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+            Token tokenEntity = tokenRepository.findByRefreshTokenAndRevokedFalse(refreshToken)
+                .orElseThrow(() -> new RuntimeException("Refresh token not found or revoked"));
+
+            if (tokenEntity.getExpiresAt() < System.currentTimeMillis()) {
+                tokenEntity.setRevoked(true);
+                tokenRepository.save(tokenEntity);
+                return AuthResponse.error("Refresh token expired");
+            }
+
+            String newAccessToken = jwtService.generateAccessToken(email);
+
+            tokenEntity.setAccessToken(newAccessToken);
+            tokenRepository.save(tokenEntity);
+
+            return AuthResponse.auth(true, newAccessToken, refreshToken, "Token refreshed successfully", null);
+        } catch (Exception e) {
+            return AuthResponse.error("Failed to refresh token: " + e.getMessage());
         }
     }
 

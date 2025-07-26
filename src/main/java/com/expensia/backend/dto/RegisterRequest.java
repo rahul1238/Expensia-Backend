@@ -1,6 +1,7 @@
 package com.expensia.backend.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 @NoArgsConstructor
@@ -18,6 +19,8 @@ public class RegisterRequest {
     private String firstName;
     private String lastName;
     private int age;
+    @NotNull
+    @Size(min=10, max=10, message="Phone number must be 10 digits")
     private String phoneNumber;
     private String occupation;
 }
