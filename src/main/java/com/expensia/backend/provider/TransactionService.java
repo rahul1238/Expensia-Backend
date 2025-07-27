@@ -4,18 +4,15 @@ import com.expensia.backend.dto.TransactionRequest;
 import com.expensia.backend.model.Transaction;
 import com.expensia.backend.model.User;
 import com.expensia.backend.repository.TransactionRepository;
-import com.expensia.backend.repository.UserRepository;
+import com.expensia.backend.utils.AuthUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
-import java.text.SimpleDateFormat;
 import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 @Service
@@ -23,61 +20,71 @@ import java.util.Optional;
 public class TransactionService {
 
   private final TransactionRepository transactionRepository;
-  private final UserRepository userRepository;
+  private final AuthUser authUser;
 
   /**
-   * Gets the currently authenticated user
-   * @return The authenticated user
-   * @throws RuntimeException if user is not authenticated or not found
+   * Retrieves all transactions for the authenticated user
+   * 
+   * @return List of transactions
    */
-  private User getAuthenticatedUser() {
-    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-    if (authentication == null || !authentication.isAuthenticated()) {
-      throw new RuntimeException("User not authenticated");
-    }
-
-    String userName = authentication.getName();
-    Optional<User> user = userRepository.findByUsername(userName);
-
-    if (user.isEmpty()) {
-      log.error("User not found with email: {}", userName);
-      throw new RuntimeException("User not found");
-    }
-
-    return user.get();
-  }
-
   public List<Transaction> getAllTransactions() {
     try {
-      User user = getAuthenticatedUser();
-      log.info("Retrieving transactions for user: {}", user.getUsername());
-      return transactionRepository.findByUserId(new ObjectId(user.getId()));
+      String userId = authUser.getCurrentUserId();
+      return transactionRepository.findByUserId(new ObjectId(userId));
     }
     catch (Exception e) {
       log.error("Error retrieving transactions", e);
-      throw new RuntimeException("Error retrieving transactions: " + e.getMessage(), e);
+      throw new RuntimeException("Error retrieving transactions", e);
     }
   }
 
-  public Transaction createTransaction(TransactionRequest request) {
+  /**
+   * Creates a new transaction for the authenticated user
+   *
+   * @param request Transaction data
+   * @return ResponseEntity containing the created transaction
+   */
+  public ResponseEntity<Transaction> createTransaction(TransactionRequest request) {
     try {
-      User user = getAuthenticatedUser();
+      User user = authUser.getCurrentUser();
+      
+      if (user.getId() == null) {
+        throw new RuntimeException("User ID not available");
+      }
+      
+      // Convert string to Currency enum
+      com.expensia.backend.utils.TransactionEnums.Currency currency;
+      try {
+        currency = com.expensia.backend.utils.TransactionEnums.Currency.valueOf(request.getCurrency());
+      } catch (IllegalArgumentException e) {
+        currency = com.expensia.backend.utils.TransactionEnums.Currency.INR;
+      }
+      
+      // Convert string to TransactionMethod enum
+      com.expensia.backend.utils.TransactionEnums.TransactionMethod transactionMethod;
+      try {
+        transactionMethod = com.expensia.backend.utils.TransactionEnums.TransactionMethod.valueOf(request.getTransactionMethod());
+      } catch (IllegalArgumentException e) {
+        transactionMethod = com.expensia.backend.utils.TransactionEnums.TransactionMethod.CREDIT_CARD;
+      }
 
       Transaction transaction = Transaction.builder()
           .userId(new ObjectId(user.getId()))
           .amount(request.getAmount())
           .description(request.getDescription())
-          .date(new Date())
+          .date(request.getDate() != null ? request.getDate() : new Date())
           .category(request.getCategory())
           .type(request.getType())
-          .currency(request.getCurrency())
+          .currency(currency)
           .notes(request.getNotes())
+          .transactionMethod(transactionMethod)
           .build();
 
-      return transactionRepository.save(transaction);
+      Transaction savedTransaction = transactionRepository.save(transaction);
+      return ResponseEntity.ok(savedTransaction);
     } catch (Exception e) {
       log.error("Error creating transaction", e);
-      throw new RuntimeException("Error creating transaction: " + e.getMessage(), e);
+      throw new RuntimeException("Error creating transaction", e);
     }
   }
 }

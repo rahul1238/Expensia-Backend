@@ -3,14 +3,18 @@ package com.expensia.backend.controller;
 import com.expensia.backend.dto.AuthResponse;
 import com.expensia.backend.dto.LoginRequest;
 import com.expensia.backend.dto.RegisterRequest;
-import com.expensia.backend.security.AuthService;
+import com.expensia.backend.auth.service.AuthService;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -18,54 +22,60 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     private final AuthService authService;
 
+    private void configureTokenCookie(Cookie cookie, int maxAge) {
+        cookie.setHttpOnly(true);
+        cookie.setMaxAge(maxAge);
+        cookie.setPath("/");
+        // Uncomment for production
+        // cookie.setSecure(true);
+        // cookie.setAttribute("SameSite", "Strict");
+    }
+
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest registerRequest, HttpServletResponse response) {
         AuthResponse authResponse = authService.register(registerRequest);
-        if (authResponse.getAccessToken() != null) {
-            Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-            accessTokenCookie.setHttpOnly(true);
-            accessTokenCookie.setPath("/");
-            response.addCookie(accessTokenCookie);
+        if (authResponse.isSuccess()) {
+            if (authResponse.getAccessToken() != null) {
+                Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
+                configureTokenCookie(accessTokenCookie, 86400); // 1 day
+                response.addCookie(accessTokenCookie);
+            }
+            if (authResponse.getRefreshToken() != null) {
+                Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
+                configureTokenCookie(refreshTokenCookie, 604800); // 7 days
+                response.addCookie(refreshTokenCookie);
+            }
+
+            // Clear tokens from the response object since they're now in cookies
+            authResponse.setAccessToken(null);
+            authResponse.setRefreshToken(null);
+            return ResponseEntity.status(HttpStatus.CREATED).body(authResponse);
         }
-        if (authResponse.getRefreshToken() != null) {
-            Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
-            refreshTokenCookie.setHttpOnly(true);
-            refreshTokenCookie.setPath("/");
-            response.addCookie(refreshTokenCookie);
-        }
-        authResponse.setAccessToken(null);
-        authResponse.setRefreshToken(null);
-        if (!authResponse.isSuccess()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(authResponse);
-        }
-        return ResponseEntity.status(HttpStatus.CREATED).body(authResponse);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(authResponse);
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response){
         try {
             AuthResponse authResponse = authService.login(request);
-            if (authResponse.getAccessToken() != null) {
-                Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-                accessTokenCookie.setHttpOnly(true);
-                accessTokenCookie.setMaxAge(86400);
-                accessTokenCookie.setPath("/");
-                response.addCookie(accessTokenCookie);
-            }
-            if (authResponse.getRefreshToken() != null) {
-                Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
-                refreshTokenCookie.setHttpOnly(true);
-                refreshTokenCookie.setMaxAge(604800);
-                refreshTokenCookie.setPath("/");
-                response.addCookie(refreshTokenCookie);
-            }
+            if (authResponse.isSuccess()) {
+                if (authResponse.getAccessToken() != null) {
+                    Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
+                    configureTokenCookie(accessTokenCookie, 86400); // 1 day
+                    response.addCookie(accessTokenCookie);
+                }
+                if (authResponse.getRefreshToken() != null) {
+                    Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
+                    configureTokenCookie(refreshTokenCookie, 604800); // 7 days
+                    response.addCookie(refreshTokenCookie);
+                }
 
-            authResponse.setAccessToken(null);
-            authResponse.setRefreshToken(null);
-            if (!authResponse.isSuccess()) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
+                // Clear tokens from the response object
+                authResponse.setAccessToken(null);
+                authResponse.setRefreshToken(null);
+                return ResponseEntity.ok(authResponse);
             }
-            return ResponseEntity.ok(authResponse);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Login failed: " + e.getMessage()));
         }
@@ -76,6 +86,8 @@ public class AuthController {
                                                HttpServletResponse response) {
         try {
             AuthResponse authResponse = authService.logout(accessToken);
+
+            // Clear cookies regardless of logout success
             Cookie accessTokenCookie = new Cookie("accessToken", null);
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setPath("/");
@@ -115,21 +127,26 @@ public class AuthController {
         if (refreshToken == null) {
             return ResponseEntity.badRequest().body(AuthResponse.error("Refresh token is required"));
         }
-        AuthResponse authResponse = authService.refreshToken(refreshToken);
-        if (authResponse.getAccessToken() != null) {
-            Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-            accessTokenCookie.setHttpOnly(true);
-            accessTokenCookie.setPath("/");
-            response.addCookie(accessTokenCookie);
-        }
 
-        authResponse.setAccessToken(null);
-        authResponse.setRefreshToken(null);
-        if (!authResponse.isSuccess()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
+        AuthResponse authResponse = authService.refreshToken(refreshToken);
+        if (authResponse.isSuccess()) {
+            if (authResponse.getAccessToken() != null) {
+                Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
+                configureTokenCookie(accessTokenCookie, 86400); // 1 day
+                response.addCookie(accessTokenCookie);
+            }
+
+            // Clear tokens from the response object
+            authResponse.setAccessToken(null);
+            authResponse.setRefreshToken(null);
+            return ResponseEntity.ok(authResponse);
         }
-        return ResponseEntity.ok(authResponse);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
     }
 
-
+    @GetMapping("/csrf-token")
+    public ResponseEntity<?> getCsrfToken(HttpServletRequest request) {
+        CsrfToken csrf = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        return ResponseEntity.ok().body(Collections.singletonMap("token", csrf.getToken()));
+    }
 }
