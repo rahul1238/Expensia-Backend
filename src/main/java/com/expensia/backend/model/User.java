@@ -29,10 +29,8 @@ public class User implements UserDetails {
     private String phoneNumber;
     private String occupation;
     private String refreshToken;
-    
     @CreatedDate
     private LocalDateTime createdAt;
-    
     @LastModifiedDate
     private LocalDateTime updatedAt;
 
