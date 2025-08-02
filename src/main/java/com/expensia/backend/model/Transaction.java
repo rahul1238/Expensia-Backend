@@ -8,10 +8,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.bson.types.ObjectId;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
@@ -28,10 +31,16 @@ public class Transaction {
     private double amount;
     @NotNull
     private Currency currency;
-    private Date date;
+    private LocalDate date;
     private String category;
     private String type;
     private String notes;
     @NotNull
     private TransactionMethod transactionMethod;
+    
+    @CreatedDate
+    private LocalDateTime createdAt;
+    
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
 }

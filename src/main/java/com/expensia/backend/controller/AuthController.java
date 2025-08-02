@@ -37,16 +37,15 @@ public class AuthController {
         if (authResponse.isSuccess()) {
             if (authResponse.getAccessToken() != null) {
                 Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-                configureTokenCookie(accessTokenCookie, 86400); // 1 day
+                configureTokenCookie(accessTokenCookie, 86400);
                 response.addCookie(accessTokenCookie);
             }
             if (authResponse.getRefreshToken() != null) {
                 Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
-                configureTokenCookie(refreshTokenCookie, 604800); // 7 days
+                configureTokenCookie(refreshTokenCookie, 604800);
                 response.addCookie(refreshTokenCookie);
             }
 
-            // Clear tokens from the response object since they're now in cookies
             authResponse.setAccessToken(null);
             authResponse.setRefreshToken(null);
             return ResponseEntity.status(HttpStatus.CREATED).body(authResponse);
@@ -61,16 +60,15 @@ public class AuthController {
             if (authResponse.isSuccess()) {
                 if (authResponse.getAccessToken() != null) {
                     Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-                    configureTokenCookie(accessTokenCookie, 86400); // 1 day
+                    configureTokenCookie(accessTokenCookie, 86400);
                     response.addCookie(accessTokenCookie);
                 }
                 if (authResponse.getRefreshToken() != null) {
                     Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
-                    configureTokenCookie(refreshTokenCookie, 604800); // 7 days
+                    configureTokenCookie(refreshTokenCookie, 604800);
                     response.addCookie(refreshTokenCookie);
                 }
 
-                // Clear tokens from the response object
                 authResponse.setAccessToken(null);
                 authResponse.setRefreshToken(null);
                 return ResponseEntity.ok(authResponse);
@@ -87,7 +85,6 @@ public class AuthController {
         try {
             AuthResponse authResponse = authService.logout(accessToken);
 
-            // Clear cookies regardless of logout success
             Cookie accessTokenCookie = new Cookie("accessToken", null);
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setPath("/");
@@ -136,7 +133,6 @@ public class AuthController {
                 response.addCookie(accessTokenCookie);
             }
 
-            // Clear tokens from the response object
             authResponse.setAccessToken(null);
             authResponse.setRefreshToken(null);
             return ResponseEntity.ok(authResponse);
