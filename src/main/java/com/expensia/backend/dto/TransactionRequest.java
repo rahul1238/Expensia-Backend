@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.Date;
+import java.time.LocalDate;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -24,7 +24,7 @@ public class TransactionRequest {
   @NotNull
   private String type;
   private String notes;
-  private Date date;
+  private LocalDate date;
   @NotNull
   private String transactionMethod; // Changed from TransactionMethod enum to String for frontend compatibility
 }
