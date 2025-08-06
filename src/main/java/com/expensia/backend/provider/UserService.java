@@ -105,10 +105,8 @@ public class UserService {
             User currentUser = authUser.getCurrentUser();
             ObjectId userId = new ObjectId(currentUser.getId());
             
-            // Get all user transactions
             List<Transaction> allTransactions = transactionRepository.findByUserId(userId);
             
-            // Calculate basic profile information
             UserStatistics.UserStatisticsBuilder statsBuilder = UserStatistics.builder()
                 .userId(currentUser.getId())
                 .username(currentUser.getUsername())
@@ -122,41 +120,29 @@ public class UserService {
                 return buildEmptyStatistics(statsBuilder, currentUser);
             }
             
-            // Calculate time periods
             LocalDate today = LocalDate.now();
             LocalDate startOfMonth = today.withDayOfMonth(1);
             LocalDate startOfYear = today.withDayOfYear(1);
             LocalDateTime startOfToday = today.atStartOfDay();
             LocalDateTime endOfToday = today.plusDays(1).atStartOfDay();
             
-            // Filter transactions by time periods
             List<Transaction> todayTransactions = filterTransactionsByDateRange(allTransactions, startOfToday, endOfToday);
             List<Transaction> thisMonthTransactions = filterTransactionsByDate(allTransactions, startOfMonth, null);
             List<Transaction> thisYearTransactions = filterTransactionsByDate(allTransactions, startOfYear, null);
             
-            // Calculate basic counts
             statsBuilder
                 .totalTransactions(allTransactions.size())
                 .transactionsToday(todayTransactions.size())
                 .transactionsThisMonth(thisMonthTransactions.size())
                 .transactionsThisYear(thisYearTransactions.size());
             
-            // Calculate amount statistics
             calculateAmountStatistics(statsBuilder, allTransactions, todayTransactions, thisMonthTransactions, thisYearTransactions);
-            
-            // Calculate breakdowns by different criteria
             calculateTypeBreakdowns(statsBuilder, allTransactions);
             calculateCategoryBreakdowns(statsBuilder, allTransactions);
             calculateMethodBreakdowns(statsBuilder, allTransactions);
             calculateCurrencyBreakdowns(statsBuilder, allTransactions);
-            
-            // Calculate time-based statistics
             calculateTimeBasedStatistics(statsBuilder, allTransactions, currentUser);
-            
-            // Calculate recent activity
             calculateRecentActivity(statsBuilder, allTransactions);
-            
-            // Calculate monthly trends
             calculateMonthlyTrends(statsBuilder, allTransactions);
             
             return statsBuilder.build();
@@ -262,7 +248,6 @@ public class UserService {
         OptionalDouble smallest = allTransactions.stream().mapToDouble(Transaction::getAmount).min();
         double average = allTransactions.isEmpty() ? 0.0 : totalAmount / allTransactions.size();
         
-        // Calculate income vs expenses for backward compatibility
         double totalIncome = 0.0;
         double totalExpenses = 0.0;
         
@@ -367,10 +352,7 @@ public class UserService {
     /**
      * Calculates time-based statistics
      */
-    private void calculateTimeBasedStatistics(UserStatistics.UserStatisticsBuilder statsBuilder, 
-                                            List<Transaction> transactions, User user) {
-        
-        // Find first and most recent transaction dates
+    private void calculateTimeBasedStatistics(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions, User user) {
         Optional<LocalDate> firstDate = transactions.stream()
             .map(Transaction::getDate)
             .filter(Objects::nonNull)
@@ -381,7 +363,6 @@ public class UserService {
             .filter(Objects::nonNull)
             .max(LocalDate::compareTo);
         
-        // Find most active day
         Map<LocalDate, Long> dailyCounts = transactions.stream()
             .filter(t -> t.getDate() != null)
             .collect(Collectors.groupingBy(Transaction::getDate, Collectors.counting()));
@@ -389,7 +370,6 @@ public class UserService {
         Optional<Map.Entry<LocalDate, Long>> mostActiveEntry = dailyCounts.entrySet().stream()
             .max(Map.Entry.comparingByValue());
         
-        // Calculate account age and average transactions per day
         long accountAgeInDays = user.getCreatedAt() != null ? 
             ChronoUnit.DAYS.between(user.getCreatedAt().toLocalDate(), LocalDate.now()) : 0;
         double avgTransactionsPerDay = accountAgeInDays > 0 ? 
@@ -428,7 +408,6 @@ public class UserService {
         Map<String, Long> monthlyCounts = new LinkedHashMap<>();
         Map<String, Double> monthlyAmounts = new LinkedHashMap<>();
         
-        // Initialize last 12 months
         LocalDate now = LocalDate.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM");
         
@@ -439,14 +418,12 @@ public class UserService {
             monthlyAmounts.put(monthKey, 0.0);
         }
         
-        // Group transactions by month
         Map<String, List<Transaction>> transactionsByMonth = transactions.stream()
             .filter(t -> t.getDate() != null)
             .filter(t -> t.getDate().isAfter(now.minusMonths(12)))
             .collect(Collectors.groupingBy(t -> 
                 YearMonth.from(t.getDate()).format(formatter)));
         
-        // Calculate counts and amounts for each month
         transactionsByMonth.forEach((month, monthTransactions) -> {
             monthlyCounts.put(month, (long) monthTransactions.size());
             monthlyAmounts.put(month, monthTransactions.stream()
