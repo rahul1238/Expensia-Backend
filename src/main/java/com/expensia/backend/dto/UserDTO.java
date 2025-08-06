@@ -18,4 +18,6 @@ public class UserDTO {
   private Integer age;
   private String phoneNumber;
   private String occupation;
+  private String createdAt;
+  private String updatedAt;
 }
