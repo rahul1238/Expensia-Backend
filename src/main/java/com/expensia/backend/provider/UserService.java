@@ -420,7 +420,7 @@ public class UserService {
         
         Map<String, List<Transaction>> transactionsByMonth = transactions.stream()
             .filter(t -> t.getDate() != null)
-            .filter(t -> t.getDate().isAfter(now.minusMonths(12)))
+            .filter(t -> !t.getDate().isBefore(now.minusMonths(12)))
             .collect(Collectors.groupingBy(t -> 
                 YearMonth.from(t.getDate()).format(formatter)));
         
