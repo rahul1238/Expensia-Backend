@@ -273,8 +273,7 @@ public class UserService {
             .totalIncome(totalIncome)
             .totalExpenses(totalExpenses)
             .netSavings(totalIncome - totalExpenses)
-            .transactionCount((int) allTransactions.size())
-            .totalTransactions(allTransactions.size());
+            .transactionCount((int) allTransactions.size());
     }
 
     /**
