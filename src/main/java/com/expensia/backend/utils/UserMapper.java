@@ -16,8 +16,6 @@ public class UserMapper {
         .age(user.getAge())
         .phoneNumber(user.getPhoneNumber())
         .occupation(user.getOccupation())
-        .createdAt(user.getCreatedAt() != null ? user.getCreatedAt().toString() : null)
-        .updatedAt(user.getUpdatedAt() != null ? user.getUpdatedAt().toString() : null)
         .build();
   }
 }

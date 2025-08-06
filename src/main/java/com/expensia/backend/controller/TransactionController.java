@@ -26,26 +26,20 @@ public class TransactionController {
 
   /**
    * Retrieves transactions for the authenticated user with optional filtering
-   * 
-   * @param category          Filter by category
-   * @param type              Filter by type
-   * @param currency          Filter by currency
+   * @param category Filter by category
+   * @param type Filter by type
+   * @param currency Filter by currency
    * @param transactionMethod Filter by transaction method
-   * @param minAmount         Filter by minimum amount
-   * @param maxAmount         Filter by maximum amount
-   * @param startDate         Filter by start date (ISO format: yyyy-MM-dd)
-   * @param endDate           Filter by end date (ISO format: yyyy-MM-dd)
-   * @param description       Filter by description (partial match)
-   * @param createdAfter      Filter by creation time after (ISO format:
-   *                          yyyy-MM-ddTHH:mm:ss)
-   * @param createdBefore     Filter by creation time before (ISO format:
-   *                          yyyy-MM-ddTHH:mm:ss)
-   * @param updatedAfter      Filter by update time after (ISO format:
-   *                          yyyy-MM-ddTHH:mm:ss)
-   * @param updatedBefore     Filter by update time before (ISO format:
-   *                          yyyy-MM-ddTHH:mm:ss)
-   * @return List of transactions (filtered if parameters provided, all if no
-   *         parameters)
+   * @param minAmount Filter by minimum amount
+   * @param maxAmount Filter by maximum amount
+   * @param startDate Filter by start date (ISO format: yyyy-MM-dd)
+   * @param endDate Filter by end date (ISO format: yyyy-MM-dd)
+   * @param description Filter by description (partial match)
+   * @param createdAfter Filter by creation time after (ISO format: yyyy-MM-ddTHH:mm:ss)
+   * @param createdBefore Filter by creation time before (ISO format: yyyy-MM-ddTHH:mm:ss)
+   * @param updatedAfter Filter by update time after (ISO format: yyyy-MM-ddTHH:mm:ss)
+   * @param updatedBefore Filter by update time before (ISO format: yyyy-MM-ddTHH:mm:ss)
+   * @return List of transactions (filtered if parameters provided, all if no parameters)
    */
   @GetMapping
   public ResponseEntity<?> getTransactions(
@@ -62,9 +56,9 @@ public class TransactionController {
       @RequestParam(required = false) String createdBefore,
       @RequestParam(required = false) String updatedAfter,
       @RequestParam(required = false) String updatedBefore) {
-
+    
     log.debug("Processing transaction request with query parameters");
-
+    
     try {
       TransactionFilterRequest filter = TransactionFilterRequest.builder()
           .category(category)
@@ -81,17 +75,18 @@ public class TransactionController {
           .updatedAfter(ValidationUtils.parseDateTime(updatedAfter))
           .updatedBefore(ValidationUtils.parseDateTime(updatedBefore))
           .build();
-
+      
       List<Transaction> transactions = transactionService.getFilteredTransactions(filter);
       return ResponseEntity.ok(transactions);
-
+      
     } catch (IllegalArgumentException e) {
       log.warn("Invalid parameter value: {}", e.getMessage());
       return ResponseEntity.badRequest()
           .body("Invalid parameter value: " + e.getMessage());
     } catch (TransactionServiceException e) {
       log.error("Transaction service error: {}", e.getDetailedMessage());
-
+      
+      // Map specific error types to appropriate HTTP status codes
       HttpStatus status = switch (e.getErrorType()) {
         case AUTHENTICATION_ERROR -> HttpStatus.UNAUTHORIZED;
         case VALIDATION_ERROR -> HttpStatus.BAD_REQUEST;
@@ -101,7 +96,7 @@ public class TransactionController {
         case EXTERNAL_SERVICE_ERROR -> HttpStatus.BAD_GATEWAY;
         default -> HttpStatus.INTERNAL_SERVER_ERROR;
       };
-
+      
       return ResponseEntity.status(status)
           .body("Transaction error: " + e.getMessage());
     } catch (Exception e) {
@@ -113,18 +108,19 @@ public class TransactionController {
 
   /**
    * Creates a new transaction
-   * 
    * @param request Transaction request data
    * @return ResponseEntity containing the created transaction
    */
   @PostMapping("/create")
   public ResponseEntity<?> createTransaction(@Valid @RequestBody TransactionRequest request) {
     log.debug("Processing transaction creation request");
-
+    
     try {
       return transactionService.createTransaction(request);
     } catch (TransactionServiceException e) {
       log.error("Transaction service error during creation: {}", e.getDetailedMessage());
+      
+      // Map specific error types to appropriate HTTP status codes
       HttpStatus status = switch (e.getErrorType()) {
         case AUTHENTICATION_ERROR -> HttpStatus.UNAUTHORIZED;
         case VALIDATION_ERROR -> HttpStatus.BAD_REQUEST;
@@ -133,7 +129,7 @@ public class TransactionController {
         case BUSINESS_LOGIC_ERROR -> HttpStatus.UNPROCESSABLE_ENTITY;
         default -> HttpStatus.INTERNAL_SERVER_ERROR;
       };
-
+      
       return ResponseEntity.status(status)
           .body("Transaction creation error: " + e.getMessage());
     } catch (Exception e) {
@@ -143,68 +139,4 @@ public class TransactionController {
     }
   }
 
-  /**
-   * Updates an existing transaction
-   * 
-   * @param id      Transaction ID to update
-   * @param request Updated transaction data
-   * @return ResponseEntity containing the updated transaction
-   */
-  @PutMapping("/{id}")
-  public ResponseEntity<?> updateTransaction(@PathVariable String id, @Valid @RequestBody TransactionRequest request) {
-    try {
-      return transactionService.updateTransaction(id, request);
-    } catch (TransactionServiceException e) {
-      log.error("Transaction service error during update: {}", e.getDetailedMessage());
-      HttpStatus status = switch (e.getErrorType()) {
-        case AUTHENTICATION_ERROR -> HttpStatus.UNAUTHORIZED;
-        case VALIDATION_ERROR -> HttpStatus.BAD_REQUEST;
-        case TRANSACTION_NOT_FOUND -> HttpStatus.NOT_FOUND;
-        case DATABASE_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
-        case BUSINESS_LOGIC_ERROR -> HttpStatus.UNPROCESSABLE_ENTITY;
-        default -> HttpStatus.INTERNAL_SERVER_ERROR;
-      };
-
-      return ResponseEntity.status(status)
-          .body("Transaction update error: " + e.getMessage());
-    } catch (Exception e) {
-      log.error("Unexpected error updating transaction", e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body("Unexpected error updating transaction: " + e.getMessage());
-    }
-  }
-
-  /**
-   * Deletes a transaction by ID
-   * 
-   * @param id Transaction ID to delete
-   * @return ResponseEntity with success message
-   */
-  @DeleteMapping("/{id}")
-  public ResponseEntity<?> deleteTransaction(@PathVariable String id) {
-    
-    log.debug("Processing transaction deletion request for ID: {}", id);
-    
-    try {
-      return transactionService.deleteTransaction(id);
-    } catch (TransactionServiceException e) {
-      log.error("Transaction service error during deletion: {}", e.getDetailedMessage());
-
-      HttpStatus status = switch (e.getErrorType()) {
-        case AUTHENTICATION_ERROR -> HttpStatus.UNAUTHORIZED;
-        case VALIDATION_ERROR -> HttpStatus.BAD_REQUEST;
-        case TRANSACTION_NOT_FOUND -> HttpStatus.NOT_FOUND;
-        case DATABASE_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
-        case BUSINESS_LOGIC_ERROR -> HttpStatus.UNPROCESSABLE_ENTITY;
-        default -> HttpStatus.INTERNAL_SERVER_ERROR;
-      };
-
-      return ResponseEntity.status(status)
-          .body("Transaction deletion error: " + e.getMessage());
-    } catch (Exception e) {
-      log.error("Unexpected error deleting transaction", e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body("Unexpected error deleting transaction: " + e.getMessage());
-    }
-  }
 }

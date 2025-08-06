@@ -33,18 +33,17 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // Create CSRF token repository with non-HttpOnly cookie (accessible to JavaScript)
-        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        CookieCsrfTokenRepository tokenRepository = new CookieCsrfTokenRepository();
         tokenRepository.setCookieName("XSRF-TOKEN");
         tokenRepository.setHeaderName("X-XSRF-TOKEN");
         tokenRepository.setParameterName("_csrf");
+        tokenRepository.setCookieHttpOnly(false);
 
         CsrfTokenRequestHandler requestHandler = new CsrfTokenRequestHandler() {
             private final XorCsrfTokenRequestAttributeHandler delegate = new XorCsrfTokenRequestAttributeHandler();
 
             @Override
-            public void handle(HttpServletRequest request, HttpServletResponse response,
-                    Supplier<CsrfToken> csrfToken) {
+            public void handle(HttpServletRequest request, HttpServletResponse response, Supplier<CsrfToken> csrfToken) {
                 delegate.handle(request, response, csrfToken);
             }
 
@@ -62,20 +61,18 @@ public class SecurityConfig {
         };
 
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf
-                        .csrfTokenRepository(tokenRepository)
-                        .csrfTokenRequestHandler(requestHandler)
-                        .ignoringRequestMatchers(
-                            "/api/auth/**",              
-                            "/api/transactions/create",  
-                            new AntPathRequestMatcher("/api/transactions/{id}", "GET")     
-                        ))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .anyRequest().authenticated())
-                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(tokenRepository)
+                .csrfTokenRequestHandler(requestHandler)
+                .ignoringRequestMatchers("/api/auth/**", "/api/transactions/create")
+            )
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -84,14 +81,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.addAllowedOrigin("http://localhost:5173");
-        configuration.addAllowedMethod("GET");
-        configuration.addAllowedMethod("POST");
-        configuration.addAllowedMethod("PUT");
-        configuration.addAllowedMethod("DELETE");
-        configuration.addAllowedMethod("OPTIONS");
-        configuration.addAllowedHeader("Authorization");
-        configuration.addAllowedHeader("Content-Type");
-        configuration.addAllowedHeader("X-XSRF-TOKEN");
+        configuration.addAllowedMethod("*");
+        configuration.addAllowedHeader("*");
         configuration.setAllowCredentials(true);
         configuration.addExposedHeader("Set-Cookie");
         configuration.addExposedHeader("XSRF-TOKEN");
