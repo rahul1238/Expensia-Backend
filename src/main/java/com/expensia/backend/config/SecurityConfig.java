@@ -69,7 +69,7 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(
                             "/api/auth/**",              
                             "/api/transactions/create",  
-                            "/api/transactions/{id}"     
+                            new AntPathRequestMatcher("/api/transactions/{id}", "GET")     
                         ))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
