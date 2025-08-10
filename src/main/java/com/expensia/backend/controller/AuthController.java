@@ -11,39 +11,45 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientException;
+import java.util.Map;
+import com.expensia.backend.repository.UserRepository;
+import com.expensia.backend.auth.service.JWTService;
+import com.expensia.backend.model.User;
+import com.expensia.backend.utils.UserMapper;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
+import com.expensia.backend.utils.CookieUtil;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final UserRepository userRepository;
+    private final JWTService jwtService;
 
-    private void configureTokenCookie(Cookie cookie, int maxAge) {
-        cookie.setHttpOnly(true);
-        cookie.setMaxAge(maxAge);
-        cookie.setPath("/");
-        // Uncomment for production
-        // cookie.setSecure(true);
-        // cookie.setAttribute("SameSite", "Strict");
-    }
+    @Value("${spring.security.oauth2.client.registration.google.client-id:}")
+    private String googleClientId;
+
+    private Cookie buildCookie(String name, String value, int maxAge) { return CookieUtil.authCookie(name, value, maxAge); }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest registerRequest, HttpServletResponse response) {
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest registerRequest,
+            HttpServletResponse response) {
         AuthResponse authResponse = authService.register(registerRequest);
         if (authResponse.isSuccess()) {
             if (authResponse.getAccessToken() != null) {
-                Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-                configureTokenCookie(accessTokenCookie, 86400);
-                response.addCookie(accessTokenCookie);
+                response.addCookie(buildCookie("accessToken", authResponse.getAccessToken(), 86400));
             }
             if (authResponse.getRefreshToken() != null) {
-                Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
-                configureTokenCookie(refreshTokenCookie, 604800);
-                response.addCookie(refreshTokenCookie);
+                response.addCookie(buildCookie("refreshToken", authResponse.getRefreshToken(), 604800));
             }
 
             authResponse.setAccessToken(null);
@@ -54,20 +60,14 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response){
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         try {
             AuthResponse authResponse = authService.login(request);
             if (authResponse.isSuccess()) {
-                if (authResponse.getAccessToken() != null) {
-                    Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-                    configureTokenCookie(accessTokenCookie, 86400);
-                    response.addCookie(accessTokenCookie);
-                }
-                if (authResponse.getRefreshToken() != null) {
-                    Cookie refreshTokenCookie = new Cookie("refreshToken", authResponse.getRefreshToken());
-                    configureTokenCookie(refreshTokenCookie, 604800);
-                    response.addCookie(refreshTokenCookie);
-                }
+                if (authResponse.getAccessToken() != null)
+                    response.addCookie(buildCookie("accessToken", authResponse.getAccessToken(), 86400));
+                if (authResponse.getRefreshToken() != null)
+                    response.addCookie(buildCookie("refreshToken", authResponse.getRefreshToken(), 604800));
 
                 authResponse.setAccessToken(null);
                 authResponse.setRefreshToken(null);
@@ -75,13 +75,14 @@ public class AuthController {
             }
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Login failed: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(AuthResponse.error("Login failed: " + e.getMessage()));
         }
     }
 
     @PostMapping("/logout")
     public ResponseEntity<AuthResponse> logout(@CookieValue(value = "accessToken", required = false) String accessToken,
-                                               HttpServletResponse response) {
+            HttpServletResponse response) {
         try {
             AuthResponse authResponse = authService.logout(accessToken);
 
@@ -102,12 +103,14 @@ public class AuthController {
             }
             return ResponseEntity.ok(authResponse);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Logout failed: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(AuthResponse.error("Logout failed: " + e.getMessage()));
         }
     }
 
     @GetMapping("/me")
-    public ResponseEntity<AuthResponse> getCurrentUser(@CookieValue(value="accessToken", required = false) String accessToken) {
+    public ResponseEntity<AuthResponse> getCurrentUser(
+            @CookieValue(value = "accessToken", required = false) String accessToken) {
         try {
             AuthResponse response = authService.getCurrentUser(accessToken);
             if (!response.isSuccess()) {
@@ -115,23 +118,22 @@ public class AuthController {
             }
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Failed to retrieve user: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(AuthResponse.error("Failed to retrieve user: " + e.getMessage()));
         }
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refreshToken(@CookieValue(value = "refreshToken", required = false) String refreshToken, HttpServletResponse response) {
+    public ResponseEntity<AuthResponse> refreshToken(
+            @CookieValue(value = "refreshToken", required = false) String refreshToken, HttpServletResponse response) {
         if (refreshToken == null) {
             return ResponseEntity.badRequest().body(AuthResponse.error("Refresh token is required"));
         }
 
         AuthResponse authResponse = authService.refreshToken(refreshToken);
         if (authResponse.isSuccess()) {
-            if (authResponse.getAccessToken() != null) {
-                Cookie accessTokenCookie = new Cookie("accessToken", authResponse.getAccessToken());
-                configureTokenCookie(accessTokenCookie, 86400); // 1 day
-                response.addCookie(accessTokenCookie);
-            }
+            if (authResponse.getAccessToken() != null)
+                response.addCookie(buildCookie("accessToken", authResponse.getAccessToken(), 86400));
 
             authResponse.setAccessToken(null);
             authResponse.setRefreshToken(null);
@@ -144,5 +146,89 @@ public class AuthController {
     public ResponseEntity<?> getCsrfToken(HttpServletRequest request) {
         CsrfToken csrf = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
         return ResponseEntity.ok().body(Collections.singletonMap("token", csrf.getToken()));
+    }
+
+    @GetMapping("/google")
+    public ResponseEntity<?> getGoogleAuthUrl() {
+        String authUrl = "/oauth2/authorization/google";
+        return ResponseEntity.ok().body(Collections.singletonMap("authUrl", authUrl));
+    }
+
+    // Google Identity Services credential endpoint (One-Tap)
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponse> loginWithGoogle(@RequestBody Map<String, String> payload, HttpServletResponse response) {
+        String credential = payload.get("credential");
+        if (credential == null || credential.isEmpty()) {
+            return ResponseEntity.badRequest().body(AuthResponse.error("Missing Google credential"));
+        }
+
+        try {
+            String url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + credential;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> tokenInfo = restTemplate.getForObject(url, Map.class);
+            if (tokenInfo == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Invalid Google token"));
+            }
+
+            String audience = (String) tokenInfo.get("aud");
+            if (googleClientId != null && !googleClientId.isEmpty() && !googleClientId.equals(audience)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Google token audience mismatch"));
+            }
+
+            String email = (String) tokenInfo.get("email");
+            String sub = (String) tokenInfo.get("sub");
+            Boolean emailVerified = Boolean.valueOf(String.valueOf(tokenInfo.get("email_verified"))); // may be string
+            String givenName = (String) tokenInfo.get("given_name");
+            String familyName = (String) tokenInfo.get("family_name");
+            String picture = (String) tokenInfo.get("picture");
+
+            if (email == null || email.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Email not provided by Google"));
+            }
+
+            // Upsert user
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user == null) {
+                user = User.builder()
+                        .email(email)
+                        .username(email)
+                        .firstName(givenName)
+                        .lastName(familyName)
+                        .provider("google")
+                        .providerId(sub)
+                        .profilePictureUrl(picture)
+                        .emailVerified(emailVerified != null && emailVerified)
+                        .password("")
+                        .build();
+            } else {
+                user.setProvider("google");
+                user.setProviderId(sub);
+                user.setProfilePictureUrl(picture);
+                user.setEmailVerified(emailVerified != null && emailVerified);
+                if ((user.getFirstName() == null || user.getFirstName().isEmpty()) && givenName != null) {
+                    user.setFirstName(givenName);
+                }
+                if ((user.getLastName() == null || user.getLastName().isEmpty()) && familyName != null) {
+                    user.setLastName(familyName);
+                }
+            }
+            user = userRepository.save(user);
+
+            String accessToken = jwtService.generateAccessToken(email);
+            String refreshToken = jwtService.generateRefreshToken(email);
+            authService.saveToken(user, accessToken, refreshToken);
+
+            response.addCookie(buildCookie("accessToken", accessToken, 86400));
+            response.addCookie(buildCookie("refreshToken", refreshToken, 604800));
+
+            var userDto = UserMapper.toDto(user);
+            return ResponseEntity.ok(AuthResponse.auth(true, null, null, "Google login successful", userDto));
+        } catch (HttpClientErrorException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Invalid Google credential"));
+        } catch (RestClientException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(AuthResponse.error("Google verification failed"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(AuthResponse.error("Google login error: " + e.getMessage()));
+        }
     }
 }

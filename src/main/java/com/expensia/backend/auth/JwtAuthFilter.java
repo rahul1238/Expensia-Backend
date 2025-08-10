@@ -66,6 +66,33 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
           SecurityContextHolder.getContext().setAuthentication(authToken);
         }
+      } else if (userEmail == null) {
+        String refreshToken = extractRefreshTokenFromCookies(request);
+        if (refreshToken != null && !jwtService.isTokenExpired(refreshToken)) {
+          String refreshTokenEmail = jwtService.extractEmail(refreshToken);
+          if (refreshTokenEmail != null) {
+            String newAccessToken = jwtService.generateAccessToken(refreshTokenEmail);
+            
+            Cookie newAccessTokenCookie = new Cookie(ACCESS_TOKEN_COOKIE_NAME, newAccessToken);
+            newAccessTokenCookie.setHttpOnly(true);
+            newAccessTokenCookie.setPath("/");
+            newAccessTokenCookie.setMaxAge(3600); // 1 hour
+            response.addCookie(newAccessTokenCookie);
+            
+            UserDetails userDetails = userDetailService.loadUserByUsername(refreshTokenEmail);
+            UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(
+                    userDetails,
+                    null,
+                    userDetails.getAuthorities()
+                );
+            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+          }
+        } else {
+          // Both tokens expired or invalid, clear cookies
+          clearAuthCookies(response);
+        }
       }
     } catch (Exception e) {
       logger.error("Error processing JWT token", e);
@@ -95,6 +122,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     // If access token is not present, check for refresh token as fallback
+    return Arrays.stream(cookies)
+        .filter(cookie -> REFRESH_TOKEN_COOKIE_NAME.equals(cookie.getName()))
+        .findFirst()
+        .map(Cookie::getValue)
+        .orElse(null);
+  }
+
+  private String extractRefreshTokenFromCookies(HttpServletRequest request) {
+    Cookie[] cookies = request.getCookies();
+    if (cookies == null) {
+      return null;
+    }
+
     return Arrays.stream(cookies)
         .filter(cookie -> REFRESH_TOKEN_COOKIE_NAME.equals(cookie.getName()))
         .findFirst()

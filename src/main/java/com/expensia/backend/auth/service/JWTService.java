@@ -42,6 +42,10 @@ public class JWTService {
                     .getBody()
                     .getSubject();
         }
+        catch (ExpiredJwtException e){
+            // Return null for expired tokens instead of throwing exception
+            return null;
+        }
         catch (JwtException e){
             throw new RuntimeException("Invalid JWT token", e);
         }
@@ -50,13 +54,13 @@ public class JWTService {
     public boolean validateToken(String token, String email) {
         try {
             String tokenEmail = extractEmail(token);
-            return tokenEmail.equals(email) && !isTokenExpired(token);
+            return tokenEmail != null && tokenEmail.equals(email) && !isTokenExpired(token);
         } catch (JwtException e) {
             return false;
         }
     }
 
-    private boolean isTokenExpired(String token) {
+    public boolean isTokenExpired(String token) {
         try {
             Date expiration = Jwts.parserBuilder()
                     .setSigningKey(getSignInKey())
