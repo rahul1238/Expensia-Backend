@@ -29,6 +29,13 @@ public class User implements UserDetails {
     private String phoneNumber;
     private String occupation;
     private String refreshToken;
+    
+    // OAuth2 specific fields
+    private String provider; // "google", "local", etc.
+    private String providerId; // Google's user ID
+    private String profilePictureUrl;
+    private boolean emailVerified;
+    
     @CreatedDate
     private LocalDateTime createdAt;
     @LastModifiedDate

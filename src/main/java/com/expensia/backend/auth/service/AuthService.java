@@ -51,6 +51,8 @@ public class AuthService {
                     .lastName(request.getLastName())
                     .phoneNumber(request.getPhoneNumber())
                     .occupation(request.getOccupation())
+                    .provider("local") // Set provider to "local" for regular registration
+                    .emailVerified(false) // Email verification can be implemented later
                     .build();
 
             User savedUser = userRepository.save(user);
@@ -141,6 +143,10 @@ public class AuthService {
 
         try {
             String email = jwtService.extractEmail(accessToken);
+            if (email == null) {
+                return AuthResponse.error("Invalid or expired access token");
+            }
+            
             User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 

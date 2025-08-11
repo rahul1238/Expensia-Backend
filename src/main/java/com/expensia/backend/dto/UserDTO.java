@@ -20,4 +20,9 @@ public class UserDTO {
   private String occupation;
   private String createdAt;
   private String updatedAt;
+  
+  // OAuth2 fields
+  private String provider;
+  private String profilePictureUrl;
+  private boolean emailVerified;
 }
