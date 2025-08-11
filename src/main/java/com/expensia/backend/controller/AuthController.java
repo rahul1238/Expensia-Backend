@@ -198,7 +198,7 @@ public class AuthController {
                         .providerId(sub)
                         .profilePictureUrl(picture)
                         .emailVerified(emailVerified != null && emailVerified)
-                        .password("")
+                        .password(null)
                         .build();
             } else {
                 user.setProvider("google");
