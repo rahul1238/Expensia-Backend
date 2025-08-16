@@ -1,7 +1,7 @@
 package com.expensia.backend.auth;
 
 import com.expensia.backend.auth.service.JWTService;
-import com.expensia.backend.provider.CustomUserDetailService;
+import com.expensia.backend.service.CustomUserDetailService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.ServletException;

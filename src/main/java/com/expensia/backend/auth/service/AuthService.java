@@ -15,6 +15,10 @@ import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -202,6 +206,89 @@ public class AuthService {
         } catch (Exception e) {
             log.error("Failed to refresh token", e);
             return AuthResponse.error("Failed to refresh token: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Google One-Tap login using an ID token (GSI credential).
+     * - Verifies token via Google tokeninfo endpoint
+     * - Optional audience check against expected clientId
+     * - Upserts user and issues tokens
+     */
+    public AuthResponse loginWithGoogleCredential(String idToken, String expectedAudience) {
+        if (idToken == null || idToken.isEmpty()) {
+            return AuthResponse.error("Missing Google credential");
+        }
+
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> tokenInfo = restTemplate.getForObject(url, Map.class);
+            if (tokenInfo == null) {
+                return AuthResponse.error("Invalid Google token");
+            }
+
+            String audience = (String) tokenInfo.get("aud");
+            if (expectedAudience != null && !expectedAudience.isEmpty() && !expectedAudience.equals(audience)) {
+                return AuthResponse.error("Google token audience mismatch");
+            }
+
+            String email = (String) tokenInfo.get("email");
+            String sub = (String) tokenInfo.get("sub");
+            Object emailVerifiedObj = tokenInfo.get("email_verified");
+            boolean emailVerified = emailVerifiedObj != null && Boolean.parseBoolean(String.valueOf(emailVerifiedObj));
+            String givenName = (String) tokenInfo.get("given_name");
+            String familyName = (String) tokenInfo.get("family_name");
+            String picture = (String) tokenInfo.get("picture");
+
+            if (email == null || email.isEmpty()) {
+                return AuthResponse.error("Email not provided by Google");
+            }
+
+            // Upsert user
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user == null) {
+                user = User.builder()
+                        .email(email)
+                        .username(email)
+                        .firstName(givenName)
+                        .lastName(familyName)
+                        .provider("google")
+                        .providerId(sub)
+                        .profilePictureUrl(picture)
+                        .emailVerified(emailVerified)
+                        .password(null)
+                        .build();
+            } else {
+                user.setProvider("google");
+                user.setProviderId(sub);
+                user.setProfilePictureUrl(picture);
+                user.setEmailVerified(emailVerified);
+                if ((user.getFirstName() == null || user.getFirstName().isEmpty()) && givenName != null) {
+                    user.setFirstName(givenName);
+                }
+                if ((user.getLastName() == null || user.getLastName().isEmpty()) && familyName != null) {
+                    user.setLastName(familyName);
+                }
+            }
+            user = userRepository.save(user);
+
+            String accessToken = jwtService.generateAccessToken(email);
+            String refreshToken = jwtService.generateRefreshToken(email);
+            saveToken(user, accessToken, refreshToken);
+
+            UserDTO userDto = UserMapper.toDto(user);
+            return AuthResponse.auth(true, accessToken, refreshToken, "Google login successful", userDto);
+        } catch (HttpClientErrorException e) {
+            log.warn("Invalid Google credential", e);
+            return AuthResponse.error("Invalid Google credential");
+        } catch (RestClientException e) {
+            log.error("Google verification failed", e);
+            return AuthResponse.error("Google verification failed");
+        } catch (Exception e) {
+            log.error("Google login error", e);
+            return AuthResponse.error("Google login error: " + e.getMessage());
         }
     }
 }

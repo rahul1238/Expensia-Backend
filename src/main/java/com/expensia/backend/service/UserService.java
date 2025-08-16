@@ -1,10 +1,9 @@
-package com.expensia.backend.provider;
+package com.expensia.backend.service;
 
 import com.expensia.backend.exception.TransactionServiceException;
 import com.expensia.backend.model.Transaction;
 import com.expensia.backend.model.User;
 import com.expensia.backend.repository.TransactionRepository;
-import com.expensia.backend.repository.UserRepository;
 import com.expensia.backend.type.UserStatistics;
 import com.expensia.backend.utils.AuthUser;
 import lombok.RequiredArgsConstructor;
@@ -26,17 +25,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final AuthUser authUser;
 
-    /**
-     * Retrieves basic user statistics for the current user
-     * Compatible with existing UserController expectations
-     * 
-     * @return UserStatistics containing basic transaction summary
-     * @throws TransactionServiceException if retrieval fails
-     */
     public UserStatistics getUserStatistics() {
         try {
             User currentUser = authUser.getCurrentUser();
@@ -94,12 +85,6 @@ public class UserService {
         }
     }
 
-    /**
-     * Retrieves comprehensive user statistics including transaction data and account information
-     * 
-     * @return UserStatistics containing all user statistics
-     * @throws TransactionServiceException if retrieval fails
-     */
     public UserStatistics getDetailedUserStatistics() {
         try {
             User currentUser = authUser.getCurrentUser();
@@ -174,9 +159,6 @@ public class UserService {
         }
     }
 
-    /**
-     * Builds empty statistics when user has no transactions
-     */
     private UserStatistics buildEmptyStatistics(UserStatistics.UserStatisticsBuilder statsBuilder, User user) {
         long accountAgeInDays = user.getCreatedAt() != null ? 
             ChronoUnit.DAYS.between(user.getCreatedAt().toLocalDate(), LocalDate.now()) : 0;
@@ -208,9 +190,6 @@ public class UserService {
             .build();
     }
 
-    /**
-     * Filters transactions by date range (for datetime comparisons)
-     */
     private List<Transaction> filterTransactionsByDateRange(List<Transaction> transactions, LocalDateTime start, LocalDateTime end) {
         return transactions.stream()
             .filter(t -> t.getCreatedAt() != null)
@@ -219,9 +198,6 @@ public class UserService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Filters transactions by date (for date comparisons)
-     */
     private List<Transaction> filterTransactionsByDate(List<Transaction> transactions, LocalDate startDate, LocalDate endDate) {
         return transactions.stream()
             .filter(t -> t.getDate() != null)
@@ -230,9 +206,6 @@ public class UserService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Calculates amount-related statistics
-     */
     private void calculateAmountStatistics(UserStatistics.UserStatisticsBuilder statsBuilder,
                                          List<Transaction> allTransactions,
                                          List<Transaction> todayTransactions,
@@ -276,9 +249,6 @@ public class UserService {
             .transactionCount((int) allTransactions.size());
     }
 
-    /**
-     * Calculates transaction breakdowns by type
-     */
     private void calculateTypeBreakdowns(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions) {
         Map<String, Long> countsByType = transactions.stream()
             .filter(t -> t.getType() != null)
@@ -294,9 +264,6 @@ public class UserService {
             .amountsByType(amountsByType);
     }
 
-    /**
-     * Calculates transaction breakdowns by category
-     */
     private void calculateCategoryBreakdowns(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions) {
         Map<String, Long> countsByCategory = transactions.stream()
             .filter(t -> t.getCategory() != null)
@@ -312,9 +279,6 @@ public class UserService {
             .amountsByCategory(amountsByCategory);
     }
 
-    /**
-     * Calculates transaction breakdowns by method
-     */
     private void calculateMethodBreakdowns(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions) {
         Map<String, Long> countsByMethod = transactions.stream()
             .filter(t -> t.getTransactionMethod() != null)
@@ -330,9 +294,6 @@ public class UserService {
             .amountsByMethod(amountsByMethod);
     }
 
-    /**
-     * Calculates transaction breakdowns by currency
-     */
     private void calculateCurrencyBreakdowns(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions) {
         Map<String, Long> countsByCurrency = transactions.stream()
             .filter(t -> t.getCurrency() != null)
@@ -348,9 +309,6 @@ public class UserService {
             .amountsByCurrency(amountsByCurrency);
     }
 
-    /**
-     * Calculates time-based statistics
-     */
     private void calculateTimeBasedStatistics(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions, User user) {
         Optional<LocalDate> firstDate = transactions.stream()
             .map(Transaction::getDate)
@@ -383,9 +341,6 @@ public class UserService {
             .averageTransactionsPerDay(avgTransactionsPerDay);
     }
 
-    /**
-     * Calculates recent activity information
-     */
     private void calculateRecentActivity(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions) {
         Optional<Transaction> mostRecentTransaction = transactions.stream()
             .filter(t -> t.getCreatedAt() != null)
@@ -400,9 +355,6 @@ public class UserService {
         }
     }
 
-    /**
-     * Calculates monthly trends for the last 12 months
-     */
     private void calculateMonthlyTrends(UserStatistics.UserStatisticsBuilder statsBuilder, List<Transaction> transactions) {
         Map<String, Long> monthlyCounts = new LinkedHashMap<>();
         Map<String, Double> monthlyAmounts = new LinkedHashMap<>();

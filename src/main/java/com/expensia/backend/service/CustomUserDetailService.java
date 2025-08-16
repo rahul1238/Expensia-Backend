@@ -1,4 +1,4 @@
-package com.expensia.backend.provider;
+package com.expensia.backend.service;
 
 import com.expensia.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

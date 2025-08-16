@@ -37,6 +37,12 @@ public class SecurityConfig {
     @Autowired
     private CustomOAuth2UserService customOAuth2UserService;
 
+    @Autowired
+    private OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+
+    @Autowired
+    private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
@@ -66,28 +72,30 @@ public class SecurityConfig {
             }
         };
 
-        http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf
-                        .csrfTokenRepository(tokenRepository)
-                        .csrfTokenRequestHandler(requestHandler)
-                        .ignoringRequestMatchers(
-                            "/api/auth/**",
-                            "/api/transactions/create",
-                            "/api/transactions/**",
-                            "/oauth2/**",
-                            "/login/oauth2/**"
-                        ))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
-                        .anyRequest().authenticated())
-                .oauth2Login(oauth2 -> oauth2
-                        .userInfoEndpoint(userInfo -> userInfo
-                                .userService(customOAuth2UserService))
-                        .successHandler(oAuth2AuthenticationSuccessHandler())
-                        .failureHandler(oAuth2AuthenticationFailureHandler()))
-                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+    http
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+        .csrf(csrf -> csrf
+            .csrfTokenRepository(tokenRepository)
+            .csrfTokenRequestHandler(requestHandler)
+            .ignoringRequestMatchers(
+                "/api/auth/**",
+                "/api/transactions/create",
+                "/api/transactions/**",
+                "/api/gmail/**",
+                "/oauth2/**",
+                "/login/oauth2/**"
+            ))
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
+            .requestMatchers("/api/gmail/callback").permitAll()
+            .anyRequest().authenticated())
+        .oauth2Login(oauth2 -> oauth2
+            .userInfoEndpoint(userInfo -> userInfo
+                .userService(customOAuth2UserService))
+            .successHandler(oAuth2AuthenticationSuccessHandler)
+            .failureHandler(oAuth2AuthenticationFailureHandler))
+        .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -117,15 +125,5 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
-    }
-
-    @Bean
-    public OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler() {
-        return new OAuth2AuthenticationSuccessHandler();
-    }
-
-    @Bean
-    public OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler() {
-        return new OAuth2AuthenticationFailureHandler();
     }
 }

@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.expensia.backend.type.UserStatistics;
 import com.expensia.backend.exception.TransactionServiceException;
-import com.expensia.backend.provider.UserService;
+import com.expensia.backend.service.UserService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

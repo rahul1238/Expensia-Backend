@@ -12,14 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClientException;
+// removed unused RestTemplate-related imports after refactor
 import java.util.Map;
-import com.expensia.backend.repository.UserRepository;
-import com.expensia.backend.auth.service.JWTService;
-import com.expensia.backend.model.User;
-import com.expensia.backend.utils.UserMapper;
+// removed unused direct repository and JWT imports after delegating to AuthService
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,9 +26,6 @@ import com.expensia.backend.utils.CookieUtil;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final UserRepository userRepository;
-    private final JWTService jwtService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id:}")
     private String googleClientId;
@@ -162,73 +154,18 @@ public class AuthController {
             return ResponseEntity.badRequest().body(AuthResponse.error("Missing Google credential"));
         }
 
-        try {
-            String url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + credential;
-            @SuppressWarnings("unchecked")
-            Map<String, Object> tokenInfo = restTemplate.getForObject(url, Map.class);
-            if (tokenInfo == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Invalid Google token"));
+        AuthResponse authResponse = authService.loginWithGoogleCredential(credential, googleClientId);
+        if (authResponse.isSuccess()) {
+            if (authResponse.getAccessToken() != null) {
+                response.addCookie(buildCookie("accessToken", authResponse.getAccessToken(), 86400));
             }
-
-            String audience = (String) tokenInfo.get("aud");
-            if (googleClientId != null && !googleClientId.isEmpty() && !googleClientId.equals(audience)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Google token audience mismatch"));
+            if (authResponse.getRefreshToken() != null) {
+                response.addCookie(buildCookie("refreshToken", authResponse.getRefreshToken(), 604800));
             }
-
-            String email = (String) tokenInfo.get("email");
-            String sub = (String) tokenInfo.get("sub");
-            Boolean emailVerified = Boolean.valueOf(String.valueOf(tokenInfo.get("email_verified"))); // may be string
-            String givenName = (String) tokenInfo.get("given_name");
-            String familyName = (String) tokenInfo.get("family_name");
-            String picture = (String) tokenInfo.get("picture");
-
-            if (email == null || email.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Email not provided by Google"));
-            }
-
-            // Upsert user
-            User user = userRepository.findByEmail(email).orElse(null);
-            if (user == null) {
-                user = User.builder()
-                        .email(email)
-                        .username(email)
-                        .firstName(givenName)
-                        .lastName(familyName)
-                        .provider("google")
-                        .providerId(sub)
-                        .profilePictureUrl(picture)
-                        .emailVerified(emailVerified != null && emailVerified)
-                        .password(null)
-                        .build();
-            } else {
-                user.setProvider("google");
-                user.setProviderId(sub);
-                user.setProfilePictureUrl(picture);
-                user.setEmailVerified(emailVerified != null && emailVerified);
-                if ((user.getFirstName() == null || user.getFirstName().isEmpty()) && givenName != null) {
-                    user.setFirstName(givenName);
-                }
-                if ((user.getLastName() == null || user.getLastName().isEmpty()) && familyName != null) {
-                    user.setLastName(familyName);
-                }
-            }
-            user = userRepository.save(user);
-
-            String accessToken = jwtService.generateAccessToken(email);
-            String refreshToken = jwtService.generateRefreshToken(email);
-            authService.saveToken(user, accessToken, refreshToken);
-
-            response.addCookie(buildCookie("accessToken", accessToken, 86400));
-            response.addCookie(buildCookie("refreshToken", refreshToken, 604800));
-
-            var userDto = UserMapper.toDto(user);
-            return ResponseEntity.ok(AuthResponse.auth(true, null, null, "Google login successful", userDto));
-        } catch (HttpClientErrorException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.error("Invalid Google credential"));
-        } catch (RestClientException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(AuthResponse.error("Google verification failed"));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(AuthResponse.error("Google login error: " + e.getMessage()));
+            authResponse.setAccessToken(null);
+            authResponse.setRefreshToken(null);
+            return ResponseEntity.ok(authResponse);
         }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
     }
 }

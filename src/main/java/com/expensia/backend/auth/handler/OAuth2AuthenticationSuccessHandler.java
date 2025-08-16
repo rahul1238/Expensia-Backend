@@ -3,6 +3,7 @@ package com.expensia.backend.auth.handler;
 import com.expensia.backend.auth.service.CustomOAuth2User;
 import com.expensia.backend.auth.service.JWTService;
 import com.expensia.backend.auth.service.AuthService;
+import org.springframework.context.annotation.Lazy;
 import com.expensia.backend.utils.CookieUtil;
 import com.expensia.backend.model.User;
 import jakarta.servlet.ServletException;
@@ -23,7 +24,7 @@ import java.io.IOException;
 public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
     @Autowired private JWTService jwtService;
-    @Autowired private AuthService authService;
+    @Autowired @Lazy private AuthService authService;
 
     @Value("${app.oauth2.authorized-redirect-uris:http://localhost:5173/auth/callback}")
     private String redirectUri;

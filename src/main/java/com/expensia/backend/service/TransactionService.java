@@ -1,4 +1,4 @@
-package com.expensia.backend.provider;
+package com.expensia.backend.service;
 
 import com.expensia.backend.dto.TransactionFilterRequest;
 import com.expensia.backend.dto.TransactionRequest;
@@ -29,12 +29,6 @@ public class TransactionService {
   private final MongoTemplate mongoTemplate;
   private final AuthUser authUser;
 
-  /**
-   * Retrieves all transactions for the authenticated user
-   * 
-   * @return List of transactions
-   * @throws TransactionServiceException if retrieval fails
-   */
   public List<Transaction> getAllTransactions() {
     try {
       String userId = authUser.getCurrentUserId();
@@ -63,13 +57,6 @@ public class TransactionService {
     }
   }
 
-  /**
-   * Retrieves transactions for the authenticated user with filters applied
-   * Uses MongoDB Criteria API for proper null handling and efficient querying
-   * 
-   * @param filter Filter criteria for transactions
-   * @return List of filtered transactions
-   */
   public List<Transaction> getFilteredTransactions(TransactionFilterRequest filter) {
     try {
       String userId = authUser.getCurrentUserId();
@@ -160,12 +147,6 @@ public class TransactionService {
     }
   }
 
-  /**
-   * Checks if the filter is empty (no criteria provided)
-   * 
-   * @param filter TransactionFilterRequest to check
-   * @return true if filter is empty, false otherwise
-   */
   private boolean isEmptyFilter(TransactionFilterRequest filter) {
     return filter == null ||
         (filter.getCategory() == null &&
@@ -183,13 +164,6 @@ public class TransactionService {
             filter.getUpdatedBefore() == null);
   }
 
-  /**
-   * Creates a new transaction for the authenticated user
-   *
-   * @param request Transaction data
-   * @return ResponseEntity containing the created transaction
-   * @throws TransactionServiceException if creation fails
-   */
   public ResponseEntity<Transaction> createTransaction(TransactionRequest request) {
     try {
       User user = authUser.getCurrentUser();
@@ -259,14 +233,6 @@ public class TransactionService {
     }
   }
 
-  /**
-   * Updates an existing transaction
-   *
-   * @param id      Transaction ID
-   * @param request Updated transaction data
-   * @return ResponseEntity containing the updated transaction
-   * @throws TransactionServiceException if update fails
-   */
   public ResponseEntity<Transaction> updateTransaction(String id, TransactionRequest request) {
     try {
       User user = authUser.getCurrentUser();
@@ -289,14 +255,12 @@ public class TransactionService {
             e);
       }
 
-      // Find existing transaction
       Transaction existingTransaction = transactionRepository.findById(id)
           .orElseThrow(() -> new TransactionServiceException(
               TransactionServiceException.TransactionErrorType.TRANSACTION_NOT_FOUND,
               "Transaction not found with ID: " + id,
               "updateTransaction"));
 
-      // Check if transaction belongs to current user
       if (!existingTransaction.getUserId().equals(new ObjectId(user.getId()))) {
         throw new TransactionServiceException(
             TransactionServiceException.TransactionErrorType.AUTHENTICATION_ERROR,
@@ -358,13 +322,6 @@ public class TransactionService {
     }
   }
 
-  /**
-   * Deletes an existing transaction
-   *
-   * @param id Transaction ID
-   * @return ResponseEntity with success message
-   * @throws TransactionServiceException if deletion fails
-   */
   public ResponseEntity<String> deleteTransaction(String id) {
     try {
       log.debug("Starting transaction deletion for ID: {}", id);

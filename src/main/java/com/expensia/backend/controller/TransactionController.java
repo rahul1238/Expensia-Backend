@@ -4,7 +4,7 @@ import com.expensia.backend.dto.TransactionFilterRequest;
 import com.expensia.backend.dto.TransactionRequest;
 import com.expensia.backend.exception.TransactionServiceException;
 import com.expensia.backend.model.Transaction;
-import com.expensia.backend.provider.TransactionService;
+import com.expensia.backend.service.TransactionService;
 import com.expensia.backend.utils.TransactionEnums;
 import com.expensia.backend.utils.ValidationUtils;
 import jakarta.validation.Valid;
