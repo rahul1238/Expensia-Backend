@@ -40,6 +40,7 @@ public class GmailSyncService {
 
     public List<EmailTransaction> syncForCurrentUser() throws Exception {
         String userId = authUser.getCurrentUserId();
+        log.info("Starting Gmail sync for user: {}", userId);
         GmailCredential cred = credentialRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Gmail not connected"));
 
@@ -57,8 +58,7 @@ public class GmailSyncService {
             throw new RuntimeException("Unable to obtain access token");
         }
 
-        String query = "subject:(transaction OR payment OR credited OR debited OR receipt OR invoice) OR " +
-                "from:(no-reply@amazon.in OR alerts@hdfcbank.net OR icicibank.com OR axisbank.com OR flipkart.com OR paypal.com OR noreply@phonepe.com OR alerts@sbi.co.in)";
+                String query = "subject:(transaction OR payment OR credited OR debited OR receipt OR invoice)";
         URI listUri = URI.create("https://gmail.googleapis.com/gmail/v1/users/me/messages?q=" + urlEncode(query) + "&maxResults=50");
 
         HttpHeaders headers = new HttpHeaders();

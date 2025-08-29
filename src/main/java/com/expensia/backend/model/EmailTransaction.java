@@ -22,6 +22,9 @@ public class EmailTransaction {
     private String id;
     @Indexed
     private String userId;
+    // Deterministic fingerprint for deduplication: sha256(userId + amount + date + merchant)
+    @Indexed(unique = true, sparse = true)
+    private String uniqueHash;
     // Fields aligned with Transaction
     private String description;
     private double amount;

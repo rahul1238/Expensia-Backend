@@ -23,7 +23,7 @@ public class GmailOAuthService {
     @Value("${spring.security.oauth2.client.registration.google.client-secret}")
     private String clientSecret;
     @Value("${app.oauth2.authorized-redirect-uris}")
-    private String redirectUris; // comma-separated, we'll pick frontend callback for login vs backend callback for gmail
+    private String redirectUris;
 
     public static final String GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
@@ -47,7 +47,6 @@ public class GmailOAuthService {
     var url = flow.newAuthorizationUrl()
                 .setRedirectUri(redirectUri)
         .setAccessType("offline");
-    // Request user consent explicitly for refresh_token
     url.set("prompt", "consent");
         return url.build();
     }
