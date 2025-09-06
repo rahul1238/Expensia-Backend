@@ -46,8 +46,12 @@ public class TransactionAIService {
     private static final Pattern NET_BANKING_TERMS = Pattern.compile("(?i)\\b(net banking|internet banking)\\b");
     private static final Pattern CASH_TERMS = Pattern.compile("(?i)\\b(atm withdrawal|cash withdrawal|cash)\\b");
     private static final Pattern PAYPAL_TERMS = Pattern.compile("(?i)\\b(paypal)\\b");
+    // Utility pattern: extract integer seconds from strings like "46s" or "2.5s" (captures integer part)
+    private static final Pattern RETRY_SECONDS = Pattern.compile("([0-9]+)");
 
     private final RestTemplate restTemplate = createRestTemplate();
+    // Reuse a single, thread-safe ObjectMapper instance
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     @Value("${ai.gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent}")
     private String geminiUrl;
@@ -252,10 +256,9 @@ public class TransactionAIService {
 
         // Parse Gemini response structure
         // Expecting something like: { candidates: [ { content: { parts: [ { text: "{...json...}" } ] } } ] }
-        com.fasterxml.jackson.databind.ObjectMapper mapper0 = new com.fasterxml.jackson.databind.ObjectMapper();
         final Map<String, Object> root;
         try {
-            @SuppressWarnings("unchecked") Map<String, Object> tmp = mapper0.readValue(resp.getBody(), Map.class);
+            @SuppressWarnings("unchecked") Map<String, Object> tmp = JSON.readValue(resp.getBody(), Map.class);
             root = tmp;
         } catch (Exception e) {
             throw new RuntimeException("AI result parse failed: " + e.getMessage());
@@ -284,8 +287,7 @@ public class TransactionAIService {
                 int last = json.lastIndexOf('}');
                 if (idx >= 0 && last > idx) json = json.substring(idx, last + 1);
             }
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            @SuppressWarnings("unchecked") Map<String, Object> out = mapper.readValue(json, Map.class);
+            @SuppressWarnings("unchecked") Map<String, Object> out = JSON.readValue(json, Map.class);
             return out;
         } catch (Exception e) {
             throw new RuntimeException("AI JSON parse failed: " + e.getMessage());
@@ -303,13 +305,12 @@ public class TransactionAIService {
             // Try to parse Retry-After header
             List<String> retryAfter = headers != null ? headers.get("Retry-After") : null;
             if (retryAfter != null && !retryAfter.isEmpty()) {
-                try { seconds = Integer.parseInt(retryAfter.getFirst()); } catch (Exception ignored) {}
+                try { seconds = Integer.parseInt(retryAfter.get(0)); } catch (Exception ignored) {}
             }
             // Try to parse JSON retry info
-            if (body != null) {
+        if (body != null) {
                 try {
-                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                    @SuppressWarnings("unchecked") Map<String, Object> root = mapper.readValue(body, Map.class);
+            @SuppressWarnings("unchecked") Map<String, Object> root = JSON.readValue(body, Map.class);
                     Object err = root.get("error");
                     if (err instanceof Map) {
                         Object details = ((Map<?,?>) err).get("details");
@@ -322,7 +323,7 @@ public class TransactionAIService {
                                         if (rd instanceof String) {
                                             String s = ((String) rd).trim();
                                             // e.g., "46s" or "2.5s"
-                                            java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9]+)").matcher(s);
+                                            java.util.regex.Matcher m = RETRY_SECONDS.matcher(s);
                                             if (m.find()) {
                                                 seconds = Integer.parseInt(m.group(1));
                                             }

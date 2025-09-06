@@ -83,6 +83,9 @@ public class GmailController {
         }
     }
 
+    // startServerSync: optional manual trigger for admins (kept simple here)
+    // Note: actual server-start sync is wired via ApplicationReadyEvent in GmailStartupSync
+
     // 4) List stored email transactions
     @GetMapping("/transactions")
     public ResponseEntity<?> getTransactions() {
