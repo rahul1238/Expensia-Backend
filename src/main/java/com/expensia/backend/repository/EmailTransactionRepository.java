@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface EmailTransactionRepository extends MongoRepository<EmailTransaction, String> {
     List<EmailTransaction> findByUserId(String userId);
     Optional<EmailTransaction> findByUserIdAndMessageId(String userId, String messageId);
+    Optional<EmailTransaction> findByUniqueHash(String uniqueHash);
 }

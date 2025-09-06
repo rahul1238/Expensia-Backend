@@ -40,6 +40,7 @@ public class GmailSyncService {
 
     public List<EmailTransaction> syncForCurrentUser() throws Exception {
         String userId = authUser.getCurrentUserId();
+        log.info("Starting Gmail sync for user: {}", userId);
         GmailCredential cred = credentialRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Gmail not connected"));
 
@@ -57,8 +58,7 @@ public class GmailSyncService {
             throw new RuntimeException("Unable to obtain access token");
         }
 
-        String query = "subject:(transaction OR payment OR credited OR debited OR receipt OR invoice) OR " +
-                "from:(no-reply@amazon.in OR alerts@hdfcbank.net OR icicibank.com OR axisbank.com OR flipkart.com OR paypal.com OR noreply@phonepe.com OR alerts@sbi.co.in)";
+                String query = "subject:(transaction OR payment OR credited OR debited OR receipt OR invoice)";
         URI listUri = URI.create("https://gmail.googleapis.com/gmail/v1/users/me/messages?q=" + urlEncode(query) + "&maxResults=50");
 
         HttpHeaders headers = new HttpHeaders();
@@ -80,10 +80,10 @@ public class GmailSyncService {
         for (JsonNode node : messages) {
             String messageId = node.get("id").asText();
             if (emailTransactionRepository.findByUserIdAndMessageId(userId, messageId).isPresent()) {
-                continue; // skip duplicates
+                continue;
             }
 
-            URI getUri = URI.create("https://gmail.googleapis.com/gmail/v1/users/me/messages/" + messageId + "?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date");
+            URI getUri = URI.create("https://gmail.googleapis.com/gmail/v1/users/me/messages/" + messageId + "?format=full&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date");
             ResponseEntity<String> getResp = restTemplate.exchange(getUri, HttpMethod.GET, entity, String.class);
             if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
                 continue;
@@ -93,8 +93,14 @@ public class GmailSyncService {
             String subject = header(msg, "Subject");
             String snippet = Optional.ofNullable(msg.get("snippet")).map(JsonNode::asText).orElse("");
 
+            // Determine authoritative date from internalDate
+            final java.time.LocalDate emailDate = extractInternalLocalDate(msg);
+
             var parsed = parsingService.parse(userId, messageId, extractEmailAddress(from), subject, snippet);
             parsed.ifPresent(tx -> {
+                if (emailDate != null) {
+                    tx.setDate(emailDate);
+                }
                 emailTransactionRepository.save(tx);
                 saved.add(tx);
             });
@@ -157,5 +163,19 @@ public class GmailSyncService {
 
     private String urlEncode(String s) {
         return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private java.time.LocalDate extractInternalLocalDate(JsonNode msg) {
+        try {
+            long internalMs = msg.has("internalDate") ? msg.get("internalDate").asLong(0L) : 0L;
+            if (internalMs > 0L) {
+                return java.time.Instant.ofEpochMilli(internalMs)
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDate();
+            }
+        } catch (Exception e) {
+            log.debug("Failed to parse internalDate: {}", e.getMessage());
+        }
+        return null;
     }
 }

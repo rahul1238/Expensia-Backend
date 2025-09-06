@@ -21,6 +21,13 @@ public class GmailCredential {
     private String userId;
     private String refreshToken;
 
+    // Incremental sync tracking
+    // Gmail message internalDate in milliseconds since epoch for the newest message we've scanned
+    private Long lastSyncedInternalDateMs;
+    // Optional: last synced Gmail message id (can assist in debugging)
+    private String lastSyncedMessageId;
+
+    // Bookkeeping timestamps
     @CreatedDate
     private LocalDateTime createdAt;
     @LastModifiedDate
