@@ -58,3 +58,17 @@ build/
 
 # Local environment variables
 .env
+
+# Application logs
+server.log
+application.log
+
+# Temporary files
+*.tmp
+*.txt
+cookies.txt
+env-vars.txt
+
+# Build artifacts
+*.jar
+!target/*.jar
