@@ -53,8 +53,14 @@ public class GmailOAuthService {
 
     public GoogleTokenResponse exchangeCode(String code, String redirectUri) throws Exception {
         GoogleAuthorizationCodeFlow flow = buildFlow(redirectUri);
-        return flow.newTokenRequest(code)
-                .setRedirectUri(redirectUri)
-                .execute();
+        try {
+            return flow.newTokenRequest(code)
+                    .setRedirectUri(redirectUri)
+                    .execute();
+        } catch (com.google.api.client.auth.oauth2.TokenResponseException e) {
+            // Re-throw with more context for proper error handling
+            throw new RuntimeException("OAuth token exchange failed with status: " + e.getStatusCode() + 
+                " - " + e.getStatusMessage(), e);
+        }
     }
 }

@@ -4,14 +4,12 @@ import com.expensia.backend.dto.UserDTO;
 import com.expensia.backend.model.User;
 import com.expensia.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
 public class AuthUser {
 
   private final UserRepository userRepository;
@@ -19,24 +17,17 @@ public class AuthUser {
   public User getCurrentUser() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-    if (authentication == null || !authentication.isAuthenticated() ||
-        authentication.getPrincipal().equals("anonymousUser")) {
+    if (authentication == null || !authentication.isAuthenticated()) {
       throw new RuntimeException("User not authenticated");
     }
 
-    // Try to get the user details from the principal
-    if (authentication.getPrincipal() instanceof User) {
-      return (User) authentication.getPrincipal();
-    } else if (authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.User) {
-      // Spring Security's User class
-      String email = ((org.springframework.security.core.userdetails.User) authentication.getPrincipal()).getUsername();
-      return userRepository.findByEmail(email)
-          .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+    Object principal = authentication.getPrincipal();
+
+    if (principal instanceof User) {
+      return (User) principal;
     }
 
-    // Fallback to using the name (which should be the email)
     String email = authentication.getName();
-    log.debug("Looking up user by email: {}", email);
     return userRepository.findByEmail(email)
         .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
   }

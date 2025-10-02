@@ -2,6 +2,7 @@ package com.expensia.backend.auth;
 
 import com.expensia.backend.auth.service.JWTService;
 import com.expensia.backend.service.CustomUserDetailService;
+import com.expensia.backend.utils.CookieUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.ServletException;
@@ -144,17 +145,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
   
   private void clearAuthCookies(HttpServletResponse response) {
     // Clear access token cookie
-    Cookie accessTokenCookie = new Cookie(ACCESS_TOKEN_COOKIE_NAME, null);
-    accessTokenCookie.setHttpOnly(true);
-    accessTokenCookie.setPath("/");
-    accessTokenCookie.setMaxAge(0);
-    response.addCookie(accessTokenCookie);
+    response.addCookie(CookieUtil.authCookie(ACCESS_TOKEN_COOKIE_NAME, "", 0));
     
     // Clear refresh token cookie
-    Cookie refreshTokenCookie = new Cookie(REFRESH_TOKEN_COOKIE_NAME, null);
-    refreshTokenCookie.setHttpOnly(true);
-    refreshTokenCookie.setPath("/");
-    refreshTokenCookie.setMaxAge(0);
-    response.addCookie(refreshTokenCookie);
+    response.addCookie(CookieUtil.authCookie(REFRESH_TOKEN_COOKIE_NAME, "", 0));
   }
 }

@@ -47,13 +47,31 @@ public class GmailController {
 
     // 2) OAuth callback to exchange code and save refresh token
     @GetMapping("/callback")
-    public ResponseEntity<?> callback(@RequestParam("code") String code) {
+    public ResponseEntity<?> callback(@RequestParam("code") String code, 
+                                    @RequestParam(value = "error", required = false) String error,
+                                    @RequestParam(value = "error_description", required = false) String errorDescription) {
         try {
+            // Check for OAuth errors first
+            if (error != null) {
+                log.error("OAuth error in callback: {} - {}", error, errorDescription);
+                return ResponseEntity.status(302)
+                    .location(URI.create(frontendBaseUrl + "/settings?gmail=error&reason=" + error))
+                    .build();
+            }
+
+            if (code == null || code.isBlank()) {
+                log.error("No authorization code received in Gmail callback");
+                return ResponseEntity.status(400).body(Map.of("error", "No authorization code received"));
+            }
+
             String redirectUri = appBaseUrl + "/api/gmail/callback";
+            log.info("Exchanging code for tokens with redirect URI: {}", redirectUri);
+            
             var tokenResp = gmailOAuthService.exchangeCode(code, redirectUri);
 
             String refreshToken = tokenResp.getRefreshToken();
             if (refreshToken == null || refreshToken.isBlank()) {
+                log.warn("No refresh token received. Access token: {}", tokenResp.getAccessToken() != null ? "present" : "missing");
                 return ResponseEntity.status(400).body(Map.of("error", "No refresh token received. Ensure prompt=consent and access_type=offline"));
             }
 
@@ -61,11 +79,14 @@ public class GmailController {
             cred.setRefreshToken(refreshToken);
             gmailSyncService.saveCredential(cred);
 
+            log.info("Gmail OAuth callback successful for user");
             // redirect back to frontend success page
             return ResponseEntity.status(302).location(URI.create(frontendBaseUrl + "/settings?gmail=connected")).build();
         } catch (Exception e) {
-            log.error("Gmail OAuth callback error", e);
-            return ResponseEntity.status(500).body(Map.of("error", "Failed to handle Gmail callback"));
+            log.error("Gmail OAuth callback error: {}", e.getMessage(), e);
+            return ResponseEntity.status(302)
+                .location(URI.create(frontendBaseUrl + "/settings?gmail=error&reason=callback_failed"))
+                .build();
         }
     }
 
@@ -73,10 +94,25 @@ public class GmailController {
     @PostMapping("/sync")
     public ResponseEntity<?> sync() {
         try {
+            log.info("Starting Gmail sync request");
             List<EmailTransaction> saved = gmailSyncService.syncForCurrentUser();
             return ResponseEntity.ok(Map.of("synced", saved.size()));
         } catch (RuntimeException re) {
-            return ResponseEntity.status(400).body(Map.of("error", re.getMessage()));
+            String errorMessage = re.getMessage();
+            log.error("Gmail sync runtime error: {}", errorMessage, re);
+            
+            // Check if it's an authentication-related error
+            if (errorMessage != null && (errorMessage.contains("Invalid JWT") || 
+                errorMessage.contains("JWT signature") || 
+                errorMessage.contains("User not authenticated") ||
+                errorMessage.contains("not trusted"))) {
+                return ResponseEntity.status(401).body(Map.of(
+                    "error", "Authentication expired. Please log in again.", 
+                    "code", "AUTH_EXPIRED"
+                ));
+            }
+            
+            return ResponseEntity.status(400).body(Map.of("error", errorMessage));
         } catch (Exception e) {
             log.error("Gmail sync failed", e);
             return ResponseEntity.status(500).body(Map.of("error", "Sync failed"));
