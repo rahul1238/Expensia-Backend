@@ -21,10 +21,20 @@ public class HealthController {
     }
 
     @GetMapping("/")
-    public ResponseEntity<Map<String, String>> root() {
-        Map<String, String> response = new HashMap<>();
+    public ResponseEntity<Map<String, Object>> root() {
+        Map<String, Object> response = new HashMap<>();
         response.put("message", "Expensia Backend API is running");
         response.put("version", "1.0.0");
+        response.put("gmailIntegration", "enabled");
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/api/status")
+    public ResponseEntity<Map<String, Object>> status() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "UP");
+        response.put("gmailIntegration", "enabled");
+        response.put("message", "All systems operational");
         return ResponseEntity.ok(response);
     }
 }

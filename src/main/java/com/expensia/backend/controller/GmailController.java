@@ -38,10 +38,14 @@ public class GmailController {
             String userEmail = authUser.getCurrentUser().getEmail();
             String redirectUri = appBaseUrl + "/api/gmail/callback";
             String url = gmailOAuthService.buildConsentUrl(redirectUri, userEmail);
-            return ResponseEntity.ok(Map.of("authUrl", url));
+            return ResponseEntity.ok(Map.of(
+                "authUrl", url
+            ));
         } catch (Exception e) {
             log.error("Failed to start Gmail connect", e);
-            return ResponseEntity.status(500).body(Map.of("error", "Failed to start Gmail connect"));
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to start Gmail connect: " + e.getMessage()
+            ));
         }
     }
 
@@ -96,7 +100,10 @@ public class GmailController {
         try {
             log.info("Starting Gmail sync request");
             List<EmailTransaction> saved = gmailSyncService.syncForCurrentUser();
-            return ResponseEntity.ok(Map.of("synced", saved.size()));
+            return ResponseEntity.ok(Map.of(
+                "synced", saved.size(),
+                "message", saved.size() > 0 ? "Sync completed successfully" : "No new transactions found"
+            ));
         } catch (RuntimeException re) {
             String errorMessage = re.getMessage();
             log.error("Gmail sync runtime error: {}", errorMessage, re);
@@ -112,20 +119,63 @@ public class GmailController {
                 ));
             }
             
-            return ResponseEntity.status(400).body(Map.of("error", errorMessage));
+            // Check if it's a testing phase related error
+            if (errorMessage != null && (errorMessage.contains("403") || 
+                errorMessage.contains("access_denied") || 
+                errorMessage.contains("unverified"))) {
+                return ResponseEntity.status(403).body(Map.of(
+                    "error", "Access denied. Please try reconnecting Gmail.",
+                    "code", "ACCESS_DENIED"
+                ));
+            }
+            
+            return ResponseEntity.status(400).body(Map.of(
+                "error", errorMessage
+            ));
         } catch (Exception e) {
             log.error("Gmail sync failed", e);
-            return ResponseEntity.status(500).body(Map.of("error", "Sync failed"));
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Sync failed: " + e.getMessage()
+            ));
         }
     }
 
     // startServerSync: optional manual trigger for admins (kept simple here)
     // Note: actual server-start sync is wired via ApplicationReadyEvent in GmailStartupSync
 
-    // 4) List stored email transactions
+    // 4) Check Gmail integration status
+    @GetMapping("/status")
+    public ResponseEntity<?> getStatus() {
+        try {
+            boolean hasCredentials = gmailSyncService.hasValidCredentials();
+            return ResponseEntity.ok(Map.of(
+                "connected", hasCredentials,
+                "message", hasCredentials ? "Gmail connected successfully" : "Gmail not connected"
+            ));
+        } catch (Exception e) {
+            log.error("Failed to get Gmail status", e);
+            return ResponseEntity.ok(Map.of(
+                "connected", false,
+                "error", "Unable to check status: " + e.getMessage()
+            ));
+        }
+    }
+
+    // 5) List stored email transactions
     @GetMapping("/transactions")
     public ResponseEntity<?> getTransactions() {
-        return ResponseEntity.ok(gmailSyncService.listForCurrentUser());
+        try {
+            List<EmailTransaction> transactions = gmailSyncService.listForCurrentUser();
+            return ResponseEntity.ok(Map.of(
+                "transactions", transactions,
+                "count", transactions.size()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to get transactions", e);
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to retrieve transactions: " + e.getMessage()
+            ));
+        }
     }
 
     // 5) Disconnect and revoke

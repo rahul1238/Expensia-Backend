@@ -131,6 +131,36 @@ public class GmailSyncService {
                 .orElse(GmailCredential.builder().userId(userId).build());
     }
 
+    public boolean hasValidCredentials() {
+        try {
+            String userId = authUser.getCurrentUserId();
+            if (userId == null || userId.isBlank()) {
+                log.debug("No current user ID available");
+                return false;
+            }
+            
+            Optional<GmailCredential> credential = credentialRepository.findByUserId(userId);
+            if (!credential.isPresent()) {
+                log.debug("No Gmail credential found for user {}", userId);
+                return false;
+            }
+            
+            boolean hasRefreshToken = credential.get().getRefreshToken() != null && 
+                                    !credential.get().getRefreshToken().isBlank();
+            
+            if (!hasRefreshToken) {
+                log.debug("Gmail credential exists but no valid refresh token for user {}", userId);
+            } else {
+                log.debug("Valid Gmail credentials found for user {}", userId);
+            }
+            
+            return hasRefreshToken;
+        } catch (Exception e) {
+            log.warn("Error checking Gmail credentials: {}", e.getMessage());
+            return false;
+        }
+    }
+
     public GmailCredential saveCredential(GmailCredential credential) {
         return credentialRepository.save(credential);
     }

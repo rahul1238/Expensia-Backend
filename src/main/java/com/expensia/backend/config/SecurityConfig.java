@@ -97,6 +97,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
                 .requestMatchers("/api/gmail/callback").permitAll()
+                .requestMatchers("/health", "/actuator/health", "/", "/api/status").permitAll()
                 .anyRequest().authenticated())
             // Disable form/basic login pages to avoid 302 redirects for APIs
             .formLogin(AbstractHttpConfigurer::disable)
