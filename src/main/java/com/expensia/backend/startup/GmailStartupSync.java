@@ -18,10 +18,11 @@ public class GmailStartupSync {
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
         try {
-            log.info("Starting server startup Gmail sync for logged-in users");
+            log.info("Server startup complete - Starting Gmail sync for all connected users");
             orchestrator.startServerSync();
+            log.info("Gmail startup sync initiated successfully");
         } catch (Exception e) {
-            log.warn("Startup Gmail sync sweep failed: {}", e.getMessage());
+            log.warn("Gmail startup sync failed, but server continues normally: {}", e.getMessage());
         }
     }
 }

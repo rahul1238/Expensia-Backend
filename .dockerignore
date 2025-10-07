@@ -1,0 +1,26 @@
+# Docker ignore for faster, smaller builds
+
+# Maven/IDE
+target/
+**/.classpath
+**/.project
+**/.settings/
+**/.idea/
+**/*.iml
+
+# VCS
+.git
+.gitignore
+
+# OS
+.DS_Store
+
+# Logs and temp
+*.log
+*.tmp
+tmp/
+server.log
+.env
+
+# Node/Yarn (if ever present)
+node_modules/

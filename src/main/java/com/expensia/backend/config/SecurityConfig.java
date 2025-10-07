@@ -22,6 +22,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import jakarta.servlet.http.HttpServletResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
@@ -76,30 +79,60 @@ public class SecurityConfig {
             }
         };
 
-    http
-        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-        .csrf(csrf -> csrf
-            .csrfTokenRepository(tokenRepository)
-            .csrfTokenRequestHandler(requestHandler)
-            .ignoringRequestMatchers(
-                "/api/auth/**",
-                "/api/transactions/create",
-                "/api/transactions/**",
-                "/api/gmail/**",
-                "/oauth2/**",
-                "/login/oauth2/**"
-            ))
-        .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
-            .requestMatchers("/api/gmail/callback").permitAll()
-            .anyRequest().authenticated())
-        .oauth2Login(oauth2 -> oauth2
-            .userInfoEndpoint(userInfo -> userInfo
-                .userService(customOAuth2UserService))
-            .successHandler(oAuth2AuthenticationSuccessHandler)
-            .failureHandler(oAuth2AuthenticationFailureHandler))
-        .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        http
+            // CORS & CSRF
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(tokenRepository)
+                .csrfTokenRequestHandler(requestHandler)
+                .ignoringRequestMatchers(
+                    "/api/auth/**",
+                    "/api/transactions/create",
+                    "/api/transactions/**",
+                    "/api/gmail/**",
+                    "/oauth2/**",
+                    "/login/oauth2/**"
+                ))
+            // Authorizations
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/**").permitAll()
+                .requestMatchers("/api/gmail/callback").permitAll()
+                .requestMatchers("/health", "/actuator/health", "/", "/api/status").permitAll()
+                .anyRequest().authenticated())
+            // Disable form/basic login pages to avoid 302 redirects for APIs
+            .formLogin(AbstractHttpConfigurer::disable)
+            .httpBasic(AbstractHttpConfigurer::disable)
+            .logout(AbstractHttpConfigurer::disable)
+            // OAuth2 login (still available if user initiates flow explicitly)
+            .oauth2Login(oauth2 -> oauth2
+                .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
+                .successHandler(oAuth2AuthenticationSuccessHandler)
+                .failureHandler(oAuth2AuthenticationFailureHandler))
+            // Stateless
+            .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            // Custom 401 / 403 handlers (instead of redirect to /login -> 302)
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    var body = java.util.Map.of(
+                        "success", false,
+                        "message", "Unauthorized"
+                    );
+                    response.getWriter().write(new ObjectMapper().writeValueAsString(body));
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    var body = java.util.Map.of(
+                        "success", false,
+                        "message", "Forbidden"
+                    );
+                    response.getWriter().write(new ObjectMapper().writeValueAsString(body));
+                })
+            )
+            // JWT filter
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

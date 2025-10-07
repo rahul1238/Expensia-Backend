@@ -39,7 +39,18 @@ public class GmailSyncService {
     private String clientSecret;
 
     public List<EmailTransaction> syncForCurrentUser() throws Exception {
-        String userId = authUser.getCurrentUserId();
+        String userId;
+        try {
+            userId = authUser.getCurrentUserId();
+        } catch (RuntimeException e) {
+            log.error("Failed to get current user ID: {}", e.getMessage());
+            if (e.getMessage() != null && (e.getMessage().contains("Invalid JWT") || 
+                e.getMessage().contains("JWT signature") || 
+                e.getMessage().contains("not trusted"))) {
+                throw new RuntimeException("Invalid JWT token");
+            }
+            throw e;
+        }
         log.info("Starting Gmail sync for user: {}", userId);
         GmailCredential cred = credentialRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Gmail not connected"));
@@ -118,6 +129,36 @@ public class GmailSyncService {
         String userId = authUser.getCurrentUserId();
         return credentialRepository.findByUserId(userId)
                 .orElse(GmailCredential.builder().userId(userId).build());
+    }
+
+    public boolean hasValidCredentials() {
+        try {
+            String userId = authUser.getCurrentUserId();
+            if (userId == null || userId.isBlank()) {
+                log.debug("No current user ID available");
+                return false;
+            }
+            
+            Optional<GmailCredential> credential = credentialRepository.findByUserId(userId);
+            if (!credential.isPresent()) {
+                log.debug("No Gmail credential found for user {}", userId);
+                return false;
+            }
+            
+            boolean hasRefreshToken = credential.get().getRefreshToken() != null && 
+                                    !credential.get().getRefreshToken().isBlank();
+            
+            if (!hasRefreshToken) {
+                log.debug("Gmail credential exists but no valid refresh token for user {}", userId);
+            } else {
+                log.debug("Valid Gmail credentials found for user {}", userId);
+            }
+            
+            return hasRefreshToken;
+        } catch (Exception e) {
+            log.warn("Error checking Gmail credentials: {}", e.getMessage());
+            return false;
+        }
     }
 
     public GmailCredential saveCredential(GmailCredential credential) {

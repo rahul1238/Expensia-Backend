@@ -1,0 +1,18 @@
+# This file specifies files that are not uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore files.
+# https://cloud.google.com/sdk/gcloud/reference/topic/gcloudignore
+
+# Ignore VCS, build, IDE, OS cruft
+.git/
+.gitignore
+.DS_Store
+
+# Build artifacts
+/target/
+
+# Local environment/secrets
+.env
+server.log
+
+# Node (if any)
+node_modules/

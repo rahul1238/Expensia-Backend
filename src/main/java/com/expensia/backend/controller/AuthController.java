@@ -20,12 +20,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
 import com.expensia.backend.utils.CookieUtil;
+import com.expensia.backend.auth.service.JWTService;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+    private final JWTService jwtService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id:}")
     private String googleClientId;
@@ -78,17 +80,8 @@ public class AuthController {
         try {
             AuthResponse authResponse = authService.logout(accessToken);
 
-            Cookie accessTokenCookie = new Cookie("accessToken", null);
-            accessTokenCookie.setHttpOnly(true);
-            accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(0);
-            response.addCookie(accessTokenCookie);
-
-            Cookie refreshTokenCookie = new Cookie("refreshToken", null);
-            refreshTokenCookie.setHttpOnly(true);
-            refreshTokenCookie.setPath("/");
-            refreshTokenCookie.setMaxAge(0);
-            response.addCookie(refreshTokenCookie);
+            response.addCookie(buildCookie("accessToken", "", 0));
+            response.addCookie(buildCookie("refreshToken", "", 0));
 
             if (!authResponse.isSuccess()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
@@ -167,5 +160,44 @@ public class AuthController {
             return ResponseEntity.ok(authResponse);
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(authResponse);
+    }
+
+    /**
+     * Diagnostic endpoint to inspect cookie presence & JWT validity.
+     * This is intentionally unauthenticated (under /api/auth/**) so you can call it
+     * right after a login request from the browser to verify whether cookies were
+     * actually stored. Remove or restrict in production once stable.
+     */
+    @GetMapping("/cookie-check")
+    public ResponseEntity<?> cookieCheck(
+            @CookieValue(value = "accessToken", required = false) String accessToken,
+            @CookieValue(value = "refreshToken", required = false) String refreshToken) {
+
+        boolean hasAccess = accessToken != null && !accessToken.isEmpty();
+        boolean hasRefresh = refreshToken != null && !refreshToken.isEmpty();
+        boolean accessValid = false;
+        String email = null;
+        String issue = null;
+        if (hasAccess) {
+            try {
+                email = jwtService.extractEmail(accessToken);
+                accessValid = email != null && !jwtService.isTokenExpired(accessToken);
+                if (!accessValid && email == null) {
+                    issue = "access token invalid or expired";
+                }
+            } catch (Exception e) {
+                issue = "exception parsing access token: " + e.getMessage();
+            }
+        } else {
+            issue = "no access token cookie";
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "hasAccessCookie", hasAccess,
+                "hasRefreshCookie", hasRefresh,
+                "accessValid", accessValid,
+                "accessEmail", email,
+                "issue", issue
+        ));
     }
 }

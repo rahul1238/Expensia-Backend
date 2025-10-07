@@ -3,6 +3,7 @@ package com.expensia.backend.service.gmail;
 import com.expensia.backend.model.GmailCredential;
 import com.expensia.backend.repository.GmailCredentialRepository;
 import com.expensia.backend.repository.TokenRepository;
+import com.expensia.backend.service.transaction.EmailTransactionEvaluationOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
@@ -22,6 +23,7 @@ public class GmailSyncOrchestrator {
     private final GmailCredentialRepository credentialRepository;
     private final TokenRepository tokenRepository;
     private final EnhancedGmailSyncService enhancedGmailSyncService;
+    private final EmailTransactionEvaluationOrchestrator evaluationOrchestrator;
 
     /**
      * startServerSync: Runs on server start for all valid logged-in users.
@@ -67,7 +69,23 @@ public class GmailSyncOrchestrator {
                         .error("User not logged in")
                         .build();
             }
-            return enhancedGmailSyncService.syncForUser(userId);
+            
+            EnhancedGmailSyncService.SyncResult syncResult = enhancedGmailSyncService.syncForUser(userId);
+            
+            // If sync was successful and new emails were added, trigger evaluation
+            if (syncResult.isSuccess() && syncResult.getAdded() > 0) {
+                log.info("Gmail sync added {} new email transactions for user {}, triggering evaluation", 
+                        syncResult.getAdded(), userId);
+                try {
+                    // Trigger evaluation asynchronously to avoid blocking the sync response
+                    evaluationOrchestrator.triggerEvaluationAsync();
+                } catch (Exception e) {
+                    log.warn("Failed to trigger email evaluation after sync for user {}: {}", userId, e.getMessage());
+                    // Don't fail the sync because of evaluation failure
+                }
+            }
+            
+            return syncResult;
         } catch (Exception e) {
             log.error("Sync failed for user {}: {}", userId, e.getMessage(), e);
             return EnhancedGmailSyncService.SyncResult.builder().success(false).error(e.getMessage()).build();
